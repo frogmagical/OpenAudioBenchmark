@@ -1,5 +1,6 @@
 /** Declarative data-quality rules shared by validation, projection and comparability. */
 import type { MeasurementConditions } from '../types.ts';
+import { isMetricId } from './types.ts';
 import type { MeasurementStatus, MetricId, ProductCategory, Unit } from './types.ts';
 
 /** Canonical unit per metric and the units a measurement may be published in. */
@@ -152,10 +153,13 @@ export function isConditionRecorded(key: keyof MeasurementConditions, conditions
   return value !== undefined && conditionValueProblem(key, value) === null;
 }
 
+/** Required conditions of `metric` that are not recorded. Throws a `RangeError` for a metric outside `METRIC_IDS`
+ * (a public helper must never index the rule tables with an unknown string). */
 export function unrecordedRequiredConditions(
   metric: MetricId,
   conditions: MeasurementConditions,
 ): (keyof MeasurementConditions)[] {
+  if (!isMetricId(metric)) throw new RangeError(`unknown metric: ${String(metric)}`);
   return REQUIRED_CONDITIONS[metric].filter((key) => !isConditionRecorded(key, conditions));
 }
 
@@ -179,9 +183,9 @@ export const VALUE_DOMAIN: Readonly<Record<MetricId, Partial<Record<Unit, { read
   crossoverFrequency: { Hz: { min: 0, exclusiveMin: true } },
 };
 
-/** True when `value` is finite and inside the domain for `metric`/`unit`. */
+/** True when `value` is finite and inside the domain for `metric`/`unit`. False for a metric outside `METRIC_IDS`. */
 export function isValueInDomain(metric: MetricId, unit: Unit, value: number): boolean {
-  if (!Number.isFinite(value)) return false;
+  if (!isMetricId(metric) || !Number.isFinite(value)) return false;
   const domain = VALUE_DOMAIN[metric][unit];
   if (!domain) return true;
   return domain.exclusiveMin ? value > domain.min : value >= domain.min;

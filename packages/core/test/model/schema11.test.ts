@@ -14,11 +14,12 @@ import { evaluateProduct } from '../../src/model/evaluate.ts';
 import { projectMetric, projectProduct, selectMeasurement, toMetricValues } from '../../src/model/project.ts';
 import {
   COMPARISON_REQUIRED_CONDITIONS, CONDITION_LABELS, METRIC_CATEGORIES, METRIC_UNITS,
-  RELEVANT_CONDITIONS, REQUIRED_CONDITIONS, VALUE_DOMAIN, formatConditionValue, unrecordedRequiredConditions,
+  RELEVANT_CONDITIONS, REQUIRED_CONDITIONS, VALUE_DOMAIN, formatConditionValue, isValueInDomain, unrecordedRequiredConditions,
 } from '../../src/model/rules.ts';
+import { toCanonicalUnit } from '../../src/model/units.ts';
 import { buildCatalogJson } from '../../src/export.ts';
 import {
-  DATASET_SCHEMA_VERSION, METRIC_IDS, REUSE_UNCHECKED, SPEAKER_METRIC_IDS, isScoringMetric,
+  DATASET_SCHEMA_VERSION, METRIC_IDS, REUSE_UNCHECKED, SPEAKER_METRIC_IDS, isMetricId, isScoringMetric,
 } from '../../src/model/types.ts';
 import type {
   Dataset, Measurement, MeasurementReference, Product, RangeMeasurement, ReusePermission, SourceReuse,
@@ -591,6 +592,23 @@ describe('runtime shape guards (final audit: status vocabulary, condition types,
       expect(result.reasons).toEqual([{ code: 'metric.unknown', details: [metric], message: expect.stringContaining('未知の指標') }]);
     },
   );
+
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf', 'loudness', ''])(
+    'public metric helpers refuse the unknown metric %j instead of indexing the rule tables', (metric) => {
+      const m = metric as unknown as Measurement['metric'];
+      expect(isMetricId(metric)).toBe(false);
+      expect(toCanonicalUnit(m, 1, 'W')).toBeNull();
+      expect(isValueInDomain(m, 'W', 1)).toBe(false);
+      expect(() => unrecordedRequiredConditions(m, {})).toThrow(RangeError);
+    },
+  );
+
+  it('isMetricId accepts exactly METRIC_IDS', () => {
+    for (const id of METRIC_IDS) expect(isMetricId(id)).toBe(true);
+    for (const other of [null, undefined, 1, {}, ['price']]) expect(isMetricId(other)).toBe(false);
+    expect(toCanonicalUnit('power', 1, 'W')).toMatchObject({ value: 1 });
+    expect(isValueInDomain('power', 'W', 1)).toBe(true);
+  });
 
   it('rejects a range whose metric is not frequencyRange', () => {
     expectError(withRange({ metric: 'constructor' as unknown as RangeMeasurement['metric'] }), 'range.metric-invalid', 'ranges[0]', [range.id]);

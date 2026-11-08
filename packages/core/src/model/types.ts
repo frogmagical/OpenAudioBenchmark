@@ -23,6 +23,11 @@ export const SPEAKER_METRIC_IDS: readonly SpeakerMetricId[] = ['sensitivity', 'n
 export type MetricId = MetricKey | SpeakerMetricId;
 export const METRIC_IDS: readonly MetricId[] = ['price', 'power', 'thdn', 'snr', ...SPEAKER_METRIC_IDS];
 
+/** Runtime guard for a metric id read from data (own list lookup; `constructor` and friends are not metrics). */
+export function isMetricId(value: unknown): value is MetricId {
+  return typeof value === 'string' && METRIC_IDS.includes(value as MetricId);
+}
+
 export function isScoringMetric(metric: MetricId): metric is MetricKey {
   return metric === 'price' || metric === 'power' || metric === 'thdn' || metric === 'snr';
 }

@@ -1,5 +1,6 @@
 /** Unit conversions as tracked transform steps. Originals are never modified. */
 import { METRIC_UNITS } from './rules.ts';
+import { isMetricId } from './types.ts';
 import type { MetricId, TransformStep, Unit } from './types.ts';
 
 export interface Conversion {
@@ -11,9 +12,10 @@ export interface Conversion {
  * Convert `value` from `from` to the metric's canonical unit.
  * Supported: identity for every metric; THD+N `dB` → `%` via `100 · 10^(dB/20)`
  * (distortion ratios are amplitude ratios). Returns `null` for a non-finite
- * input, an unsupported pair, or a non-finite / underflowed result instead of guessing.
+ * input, an unsupported pair, an unknown metric, or a non-finite / underflowed result instead of guessing.
  */
 export function toCanonicalUnit(metric: MetricId, value: number, from: Unit): Conversion | null {
+  if (!isMetricId(metric)) return null;
   const { canonical } = METRIC_UNITS[metric];
   if (!Number.isFinite(value)) return null;
   if (from === canonical) {
