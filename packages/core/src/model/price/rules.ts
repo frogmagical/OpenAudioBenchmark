@@ -10,8 +10,13 @@ export const ISO_DATETIME_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\
 
 export function isIsoDateTimeWithOffset(value: string): boolean {
   if (!ISO_DATETIME_WITH_OFFSET.test(value)) return false;
-  const t = Date.parse(value);
-  return Number.isFinite(t);
+  // Date.parse tolerates impossible calendar days in some engines; check the date part explicitly.
+  const day = value.slice(0, 10);
+  const utc = new Date(`${day}T00:00:00.000Z`);
+  if (!Number.isFinite(utc.getTime()) || utc.toISOString().slice(0, 10) !== day) return false;
+  const [, hh = '0', mm = '0', ss = '0'] = /T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(value) ?? [];
+  if (Number(hh) > 23 || Number(mm) > 59 || Number(ss) > 59) return false;
+  return Number.isFinite(Date.parse(value));
 }
 
 /**
