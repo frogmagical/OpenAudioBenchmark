@@ -17,6 +17,21 @@ test.describe('layout at the project viewport', () => {
     });
   }
 
+  test('deep link lands at the top with the section title fully visible', async ({ page }, info) => {
+    await page.goto('/#pairing');
+    await page.waitForLoadState('load');
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    const title = page.locator('#pairing .sectitle');
+    await expect(title).toBeVisible();
+    const titleBox = (await title.boundingBox())!;
+    const width = info.project.use.viewport!.width;
+    // Desktop: the sticky header must not cover the title. Mobile: the header is hidden and the
+    // sticky top navigation must not cover it either.
+    const cover = width > 760 ? page.locator('.app-header') : page.locator('.app-sidebar');
+    const coverBox = (await cover.boundingBox())!;
+    expect(titleBox.y).toBeGreaterThanOrEqual(coverBox.y + coverBox.height);
+  });
+
   test('navigation shape matches the viewport', async ({ page }, info) => {
     await page.goto('/');
     const sidebar = page.locator('.app-sidebar');

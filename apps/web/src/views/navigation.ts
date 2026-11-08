@@ -39,4 +39,10 @@ export function initNavigation(): void {
   }
   window.addEventListener('hashchange', () => goView(location.hash.slice(1)));
   goView(location.hash.slice(1) || 'overview');
+  // Deep links (/#pairing): the browser scrolls to the fragment's section after this module ran,
+  // which parks the section title under the sticky header. Re-assert the top once loading ends.
+  // Found by the P2-2 browser verification; same behaviour existed in the v0.4 prototype.
+  if (document.readyState !== 'complete') {
+    window.addEventListener('load', () => window.scrollTo({ top: 0, behavior: 'instant' }), { once: true });
+  }
 }
