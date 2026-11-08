@@ -3,7 +3,8 @@
  * Pure explanation using metric-relevant conditions and recorded finite values.
  */
 import { compareConditions } from '../conditions.ts';
-import { CONDITION_LABELS, formatConditionValue, RELEVANT_CONDITIONS, STATUS_LABELS, unrecordedRequiredConditions } from './rules.ts';
+import { COMPARISON_REQUIRED_CONDITIONS, CONDITION_LABELS, formatConditionValue, isConditionRecorded, RELEVANT_CONDITIONS, STATUS_LABELS, unrecordedRequiredConditions } from './rules.ts';
+import { METRIC_IDS } from './types.ts';
 import type { Measurement } from './types.ts';
 import { toCanonicalUnit } from './units.ts';
 
@@ -28,12 +29,16 @@ export interface Comparability {
  *
  * not-comparable
  * - `metric.differs`: `a.metric !== b.metric`.
+ * - `metric.unknown`: a metric outside `METRIC_IDS` on either side; no further rule runs (the metric tables
+ *   cannot be indexed by an unknown string).
  * - `value.missing`: either side is `missing`, null or non-finite (nothing to compare).
  * - `unit.not-convertible`: a recorded finite value cannot convert to its metric's canonical unit.
  *   Missing/non-finite values are never probed with a substitute value.
  * - `conditions.mismatch`: relevant conditions differ; details = mismatched keys, message =
  *   Japanese labels and both recorded values (or 未記録).
- * - `conditions.unrecorded`: a required relevant condition is undefined on either side;
+ * - `conditions.unrecorded`: a required relevant condition (`REQUIRED_CONDITIONS`) **or a
+ *   comparison-required condition (`COMPARISON_REQUIRED_CONDITIONS`, e.g. the instrument — D-03)**
+ *   is not recorded on either side (absent, `null`, blank or malformed — `isConditionRecorded`);
  *   details = keys, message = Japanese labels. Both condition rules are skipped for different
  *   metrics. Price has no relevant conditions and is never blocked by condition rules.
  *
@@ -54,6 +59,11 @@ export function explainComparability(a: Measurement, b: Measurement): Comparabil
   const add = (code: string, message: string, details: readonly string[]) => reasons.push({ code, message, details });
 
   if (a.metric !== b.metric) add('metric.differs', '指標が異なるため、測定値を直接比較できません', [a.metric, b.metric]);
+  const unknownMetrics = [a.metric, b.metric].filter((metric) => !METRIC_IDS.includes(metric));
+  if (unknownMetrics.length > 0) {
+    add('metric.unknown', '未知の指標のため比較できません', [...new Set(unknownMetrics)]);
+    return { level: 'not-comparable', reasons };
+  }
   const aHasValue = a.value !== null && Number.isFinite(a.value);
   const bHasValue = b.value !== null && Number.isFinite(b.value);
   if (a.status === 'missing' || b.status === 'missing' || !aHasValue || !bHasValue) {
@@ -76,9 +86,11 @@ export function explainComparability(a: Measurement, b: Measurement): Comparabil
         `${CONDITION_LABELS[key]}が ${formatConditionValue(key, a.conditions)} と ${formatConditionValue(key, b.conditions)} で異なる`);
       add('conditions.mismatch', `${differences.join('、')}ため直接比較できません`, conditions.mismatches);
     }
+    const comparisonRequired = COMPARISON_REQUIRED_CONDITIONS[a.metric];
     const unrecorded = [...new Set([
       ...unrecordedRequiredConditions(a.metric, a.conditions),
       ...unrecordedRequiredConditions(b.metric, b.conditions),
+      ...comparisonRequired.filter((key) => !isConditionRecorded(key, a.conditions) || !isConditionRecorded(key, b.conditions)),
     ])].filter((key) => relevant.includes(key));
     if (unrecorded.length > 0) {
       add('conditions.unrecorded', `比較に必要な測定条件が未記録です: ${unrecorded.map((key) => CONDITION_LABELS[key]).join('、')}`, unrecorded);

@@ -15,8 +15,9 @@ export function sourceLabel(source: Source): string {
   return source.notes ? `${source.id}: ${source.notes}` : source.id;
 }
 
-/** Sources referenced by a product's measurements, in first-appearance order. */
-export function sourcesForProduct(dataset: Dataset, productId: string): Source[] {
+/** Sources referenced by a product's measurements, in first-appearance order. The dataset must pass the gate. */
+export function sourcesForProduct(input: Dataset | PreparedDataset, productId: string): Source[] {
+  const { dataset } = assertUsable(input);
   const ids: string[] = [];
   for (const m of dataset.measurements) {
     if (m.productId === productId && m.sourceId !== null && !ids.includes(m.sourceId)) ids.push(m.sourceId);

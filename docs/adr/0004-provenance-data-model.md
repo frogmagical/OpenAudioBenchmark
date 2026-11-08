@@ -1,6 +1,6 @@
 # ADR-0004 — Provenance data model and data-quality gate (P2-1)
 
-Status: accepted for implementation (2026-11-08, product-owner direction after the Phase 1 review).
+Status: accepted for implementation (2026-11-08, product-owner direction after the Phase 1 review). **Revision 1.1 (2026-11-08, Phase 3)** — see "Schema 1.1" below; follows the PL decisions recorded in ADR-0007 and docs/phase3/OPEN_DECISIONS.md.
 
 ## Context
 
@@ -30,3 +30,30 @@ Phase 1 carried numbers on the product (`DemoProduct.price/power/thdn/snr`) with
 - Real-product data can be entered only as `Measurement`s with sources and conditions, and only after `validateDataset` reports no errors.
 - The methodology version is unchanged (`0.5.0-demo`): formulas, bounds and thresholds did not change. Dataset schema version is `1.0`.
 - UI work to show per-metric status, sources and comparability reasons follows in the same PR where feasible, otherwise as P2-1b.
+
+## Schema 1.1 (Phase 3, implements the data-model parts of G1–G8 of docs/phase3/DATA_GAP_ANALYSIS.md; G2's pairing bridge and G9 are not included)
+
+| Change | Decision it implements |
+| --- | --- |
+| `MetricId = MetricKey \| SpeakerMetricId` (`sensitivity`, `nominalImpedance`, `minimumImpedance`, `crossoverFrequency`); `METRIC_KEYS` keeps the four scoring metrics; `projectProduct` projects every `MetricId`, `toMetricValues` narrows to `MetricKey` | D-10 / G1 — speaker metrics are never fed to the utility score |
+| `METRIC_CATEGORIES`: metric ↔ product category validation (`measurement.metric-category-mismatch`) | DATA_GAP validation rules |
+| `Source.tier` (primary / secondary) and `Source.reuse` (quoteFacts / reproduceFigures / storeRawData / redistribute, basis, checkedAt). In non-fictional datasets a numeric `Measurement` may cite a source only when `reuse.quoteFacts` ∈ `NUMBER_STORAGE_PERMITTED` (allowed, allowed-with-attribution, permitted-by-law-or-terms); otherwise only a `MeasurementReference` | D-15 / D-09 / G3 — internal storage is not automatically permitted; the legal question itself stays with PM/legal |
+| `MeasurementReference` (`Dataset.references`): value-less pointer to a figure held at a source; quantities as words only (digits rejected); never projected or scored | D-16 / G5 (option B) |
+| `RangeMeasurement` (`Dataset.ranges`): low/high/tolerance/conditions kept as one record; display only | D-07 |
+| `MeasurementConditions` gains `instrument`, `testSignal`, `averaging`, `averagingBandHz`, `distortionCriterion`, `sensitivityReference`, `distanceM` | G4 / P8 / D-06 |
+| `REQUIRED_CONDITIONS.power` gains `distortionCriterion`; speaker metrics get their required sets (sensitivity: reference, distance, averaging, averaging band, environment; minimum impedance: frequency) | G6 / D-04 / P8 |
+| `COMPARISON_REQUIRED_CONDITIONS`: `instrument` must be recorded on both sides for power / THD+N / S/N / sensitivity / minimum impedance comparisons, otherwise `conditions.unrecorded`. Deliberately **not** part of `REQUIRED_CONDITIONS`, so it never affects scoring eligibility | D-03 (PL: unknown instrument withholds comparisons; no blanket eligibility condition) |
+| `Product.region`, `dimensionsMm`, `massKg`; `FeatureKey` gains optical / coaxial / subout / xlr | G7 |
+| `DATASET_SCHEMA_VERSION = '1.1'`; the fictional demo dataset is migrated in the same change (reuse marked `allowed` with the basis "fictional demonstration data authored by this project") | G8 |
+
+Runtime guards (added after the independent audits): evidence statuses and every condition value are validated at runtime (`*.status-invalid`, `*.condition-value-invalid` via `conditionValueProblem`: type, vocabulary, sign, tuple shape, unknown keys) because loaded data does not carry TypeScript's guarantees; a `null`, blank or malformed condition counts as unrecorded everywhere (`isConditionRecorded`); the views escape status attributes; and the gate is asserted at `initApp`, every view, `buildCatalogJson` and the dataset-taking core helpers, not only through product projection. Condition-key lookups use own properties only, and metric ids are checked against `METRIC_IDS` before any metric table is indexed, so JSON strings such as `constructor` are rejected as unknown keys/metrics instead of crashing the validator or the comparability explanation; the public helpers `toCanonicalUnit` (null), `isValueInDomain` (false) and `unrecordedRequiredConditions` (`RangeError`) guard their metric argument with `isMetricId` as well.
+
+Not in 1.1: scoring eligibility (G9 / D-17) — a separate PR with the demo-result diff for explicit approval (D-18).
+
+### Effect on the fictional demo (to be approved explicitly, D-18)
+
+The demo records carry no `distortionCriterion` and no `instrument`. Under 1.1:
+- numeric scores and coverage of the six demo products are **unchanged** (scoring eligibility is not implemented; condition-unrecorded values still reach the scorer with a warning);
+- quality warnings rise from 17 to 23 (`measurement.required-condition-unrecorded` now also on the six `power` records); the catalog record details therefore show one more warning per product;
+- in the comparison view the 8 Ω output row is **newly withheld** (previously comparable with the uncertainty caveat); THD+N, S/N and the utility score were already withheld.
+No demo condition is back-filled (D-18).

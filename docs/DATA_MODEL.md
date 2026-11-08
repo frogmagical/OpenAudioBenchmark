@@ -1,16 +1,18 @@
 # Data model
 
-Implemented in `packages/core/src/model/` (dataset schema `1.0`, ADR-0004). Strongly typed, immutable records; derived values carry lineage.
+Implemented in `packages/core/src/model/` (dataset schema `1.1`, ADR-0004 and its 1.1 revision). Strongly typed, immutable records; derived values carry lineage.
 
 ## Entities
 
 | Entity | Purpose | Key fields |
 | --- | --- | --- |
-| `Product` | Identity only | id, maker, model, revision, category, name, subtitle, features, fictional |
-| `Source` | Where a figure comes from | id, publisher, kind (independent-lab / manufacturer / retailer / editorial / other), url, publishedAt, accessedAt, license, notes, archiveRef |
-| `Measurement` | One figure | id, productId, metric, value \| null, unit, status, sourceId, conditions, uncertainty \| null, derivation, capturedAt, version, notes |
-| `MeasurementConditions` | How it was measured | frequencyHz, bandwidthHz, loadOhms, loadType, channelsDriven, inputSignal, outputLevel, weighting, environment, method |
-| `Dataset` | A validated bundle | schemaVersion, fictional, products, sources, measurements |
+| `Product` | Identity and stated attributes | id, maker, model, revision, category, name, subtitle, features, region, dimensionsMm, massKg, fictional |
+| `Source` | Where a figure comes from and what may be reused | id, publisher, kind (independent-lab / manufacturer / retailer / editorial / other), tier (primary / secondary), url, publishedAt, accessedAt, license, notes, archiveRef, reuse {quoteFacts, reproduceFigures, storeRawData, redistribute, basis, checkedAt} |
+| `Measurement` | One figure | id, productId, metric (`MetricId`: price, power, thdn, snr, sensitivity, nominalImpedance, minimumImpedance, crossoverFrequency), value \| null, unit, status, sourceId, conditions, uncertainty \| null, derivation, capturedAt, version, notes |
+| `MeasurementReference` | A figure that exists at a source but whose value is not stored (rights unconfirmed, third-party measurement kept as location only) | id, productId, metric, sourceId, quantities (words, no digits), conditions, status, accessedAt, notes |
+| `RangeMeasurement` | A range specification such as "47 Hz – 45 kHz (−6 dB)" | id, productId, metric `frequencyRange`, lowHz, highHz, toleranceDb, toleranceKind, status, sourceId, conditions, capturedAt, version |
+| `MeasurementConditions` | How it was measured | frequencyHz, bandwidthHz, loadOhms, loadType, channelsDriven, inputSignal, outputLevel, weighting, environment, method, instrument, testSignal, averaging, averagingBandHz, distortionCriterion, sensitivityReference, distanceM |
+| `Dataset` | A validated bundle | schemaVersion (`1.1`), fictional, products, sources, measurements, references?, ranges? |
 
 Additional record types:
 
@@ -53,14 +55,17 @@ Unknown uncertainty is `null`. An uncertainty of 0 is a validation error.
 
 ## Data-quality gate
 
-- `prepareDataset(dataset)` runs `validateDataset` once and returns a `PreparedDataset` (`usable`, `errors`, `warnings`, `issuesById`). Projection, the adapter, the views and the export accept a prepared dataset; `assertUsable` throws when errors exist, so a dataset that fails the gate never reaches a view or an export. Warnings attached to the selected measurement travel into every projection and are displayed.
+- `prepareDataset(dataset)` runs `validateDataset` once and returns a `PreparedDataset` (`usable`, `errors`, `warnings`, `issuesById`). Projection, the adapter, the views and the export accept a prepared dataset; `assertUsable` throws when errors exist, so a dataset that fails the gate never reaches a view or an export. The gate is asserted at every public boundary — app start-up (`initApp`), every view (`initCatalog`, `renderCompare`, `renderSources`), the JSON export (`buildCatalogJson` with a dataset) and the core helpers that take a dataset (`projectProduct`, `projectMetric`, `selectMeasurement` with a prepared dataset, `sourcesForProduct`, `toDemoProduct`) — independently of how many products the dataset has. Warnings attached to the selected measurement travel into every projection and are displayed.
 - `validateDataset(dataset)` → `QualityIssue[]` with code, severity (error / warning), path, Japanese message and related ids.
-  - Errors: schema version; fictional flag mismatch; duplicate or empty ids; dangling product/source references; value/status inconsistency; non-finite or out-of-domain values (price > 0, power > 0, THD+N % > 0); unaccepted units; missing source, or a source on a `missing` record; missing or blank derivation on estimates, derivation on non-estimates; uncertainty that is zero, negative, non-finite, reversed, on a `missing` record or in another unit; non-positive-integer version; status/source-kind conflicts; invalid `accessedAt`, `publishedAt`, `capturedAt` (calendar dates, `YYYY-MM-DD`); missing/blank source URL when the dataset is **not** fictional.
+  - Errors: schema version; fictional flag mismatch; duplicate or empty ids; dangling product/source references; value/status inconsistency; non-finite or out-of-domain values (price > 0, power > 0, THD+N % > 0); unaccepted units; missing source, or a source on a `missing` record; missing or blank derivation on estimates, derivation on non-estimates; uncertainty that is zero, negative, non-finite, reversed, on a `missing` record or in another unit; non-positive-integer version; status/source-kind conflicts; metric outside `METRIC_IDS` (`*.metric-invalid`; metric-dependent checks are skipped for it); evidence status outside the vocabulary (`*.status-invalid`; references and ranges may not be `missing`); condition values that are `null`, of the wrong type, outside an enum vocabulary, blank, non-positive, malformed band tuples or unknown keys (`*.condition-value-invalid`, see `conditionValueProblem`); invalid `accessedAt`, `publishedAt`, `capturedAt` (calendar dates, `YYYY-MM-DD`); missing/blank source URL when the dataset is **not** fictional.
   - Warnings: unrecorded required conditions; differing relevant conditions within one product and metric; ambiguous selection (two equally ranked records with different values); source without URL (fictional datasets); unreferenced sources; products without measurements.
 - Condition relevance: `RELEVANT_CONDITIONS[metric]` limits mismatch checks to the keys that matter for that metric (none for price).
 - `explainComparability(a, b)` → level `comparable` / `comparable-with-caveats` / `not-comparable` with all applicable reasons (metric differs, value missing or non-finite, unit not convertible, relevant condition mismatch — naming each key with both values — or required condition unrecorded; evidence tier differs, estimated, unit converted, uncertainty unstated). `explainMetricComparability(prepared, productA, productB, metric)` applies it to the records two products actually use and treats an absent record exactly like an explicit `missing` one.
 - `evaluateProduct(prepared, productId, weights)` returns the projection, the scorer input, the utility result and, per metric, the full lineage including the `normalize` step. The JSON export (`buildCatalogJson(..., { dataset })`, format 0.4.0) publishes this chain as `provenance`.
-- `REQUIRED_CONDITIONS` per metric: power → loadOhms, channelsDriven, bandwidthHz; THD+N → loadOhms, outputLevel, bandwidthHz; S/N → weighting, outputLevel; price → none.
+- `REQUIRED_CONDITIONS` per metric (drives the "unrecorded" warnings and the comparability block today; scoring eligibility based on it is **not implemented yet** — G9/D-17, see ADR-0007 P9): power → loadOhms, channelsDriven, bandwidthHz, distortionCriterion; THD+N → loadOhms, outputLevel, bandwidthHz; S/N → weighting, outputLevel; price → none; sensitivity → sensitivityReference, distanceM, averaging, averagingBandHz, environment; minimumImpedance → frequencyHz; nominalImpedance / crossoverFrequency → none.
+- `COMPARISON_REQUIRED_CONDITIONS` (comparison only, never eligibility — D-03): `instrument` for power, THD+N, S/N, sensitivity and minimum impedance. Unrecorded on either side → `conditions.unrecorded`. "Recorded" means present and well-formed (`isConditionRecorded`): a `null`, blank or malformed value counts as unrecorded for required and comparison-only conditions alike, so it can never establish comparability.
+- `METRIC_CATEGORIES`: amplifier metrics only on amplifiers, speaker metrics only on speakers, price on any category.
+- Rights (D-15): in a non-fictional dataset a numeric `Measurement` may cite a source only when `reuse.quoteFacts` is `allowed`, `allowed-with-attribution` or `permitted-by-law-or-terms`; `unknown` / `prohibited` sources can only be referenced through `MeasurementReference`. Publication is a separate approval.
 
 ## Licensing
 

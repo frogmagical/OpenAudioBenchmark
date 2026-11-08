@@ -5,7 +5,7 @@
 import { FICTIONAL_DATA_NOTICE } from './fixtures.ts';
 import { METHODOLOGY_VERSION } from './methodology.ts';
 import { evaluateProduct } from './model/evaluate.ts';
-import { ensurePrepared } from './model/prepare.ts';
+import { assertUsable } from './model/prepare.ts';
 import type { PreparedDataset } from './model/prepare.ts';
 import type { Dataset } from './model/types.ts';
 import { calculateUtility } from './scoring.ts';
@@ -98,14 +98,15 @@ export function buildCatalogCsv(products: readonly DemoProduct[], weights: Weigh
  *    products: products.map(p => ({ ...p, computed: toExportedUtility(calculateUtility(p, weights)) })) }`.
  * `version` is the export-format version (see CATALOG_JSON_VERSION). When
  * `options.dataset` is given, each product also carries `provenance` (per
- * metric: original record, steps, warnings).
+ * metric: original record, steps, warnings). An unusable dataset (quality-gate
+ * errors) is rejected with an exception — nothing from it is exported.
  */
 export function buildCatalogJson(
   products: readonly DemoProduct[],
   weights: Weights,
   options: { readonly date: string; readonly dataset?: Dataset | PreparedDataset },
 ): string {
-  const prepared = options.dataset ? ensurePrepared(options.dataset) : null;
+  const prepared = options.dataset ? assertUsable(options.dataset) : null;
   return JSON.stringify({
     notice: FICTIONAL_DATA_NOTICE,
     version: CATALOG_JSON_VERSION,

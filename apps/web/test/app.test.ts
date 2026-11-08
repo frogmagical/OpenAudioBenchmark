@@ -4,13 +4,15 @@
  * what remains to be verified in a browser.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEMO_DATASET, METHODOLOGY_VERSION, prepareDataset } from '@openaudiobenchmark/core';
-import type { Dataset } from '@openaudiobenchmark/core';
+import { DEMO_DATASET, METHODOLOGY_VERSION, WEIGHT_PRESETS, prepareDataset } from '@openaudiobenchmark/core';
+import type { Dataset, MeasurementReference, RangeMeasurement, ReusePermission } from '@openaudiobenchmark/core';
 import { initApp } from '../src/app.ts';
 import type { App } from '../src/app.ts';
 import { INVALID_INPUT_TEXT } from '../src/views/pairing.ts';
 import { KNOWN_LIMITS } from '../src/views/methodology.ts';
-import { NO_SELECTION_TEXT } from '../src/views/compare.ts';
+import { NO_SELECTION_TEXT, renderCompare } from '../src/views/compare.ts';
+import { initCatalog } from '../src/views/catalog.ts';
+import { renderSources, renderSourcesUnchecked } from '../src/views/sources.ts';
 import html from '../index.html?raw';
 
 const body = html.split('<body>')[1]!.split('<script')[0]!;
@@ -139,9 +141,11 @@ describe('catalog', () => {
     const a = records().find((r) => r.dataset['productId'] === 'a')!;
     expect(a.querySelector('.provenance li[data-metric="power"]')!.textContent).toContain('第三者測定');
     expect(a.querySelector('.provenance li[data-metric="price"]')!.textContent).toContain('メーカー公称');
+    // Schema 1.1: power also lacks its distortion criterion in the demo → three unrecorded-condition warnings.
     const issues = Array.from(a.querySelectorAll<HTMLElement>('.quality-issues li')).map((li) => li.dataset['issue']);
-    expect(issues).toEqual(['measurement.required-condition-unrecorded', 'measurement.required-condition-unrecorded']);
+    expect(issues).toEqual(['measurement.required-condition-unrecorded', 'measurement.required-condition-unrecorded', 'measurement.required-condition-unrecorded']);
     expect(a.querySelector('.quality-issues')!.textContent).toContain('outputLevel');
+    expect(a.querySelector('.quality-issues')!.textContent).toContain('歪み基準');
   });
 
   it('filters by budget, required features and third-party verification', () => {
@@ -304,7 +308,13 @@ describe('catalog', () => {
 
 describe('catalog with another prepared dataset', () => {
   it('forwards the dataset to the comparison and derives every number from it', () => {
-    const full = { ...DEMO_DATASET.measurements[0]!.conditions, outputLevel: '1 W', weighting: 'A' as const };
+    const full = {
+      ...DEMO_DATASET.measurements[0]!.conditions,
+      outputLevel: '1 W',
+      weighting: 'A' as const,
+      distortionCriterion: 'THD+N 1 %',
+      instrument: 'Demo Analyzer（架空）',
+    };
     const ds: Dataset = {
       ...DEMO_DATASET,
       measurements: DEMO_DATASET.measurements.map((m) => ({
@@ -338,7 +348,7 @@ describe('catalog with another prepared dataset', () => {
       products: { id: string; provenance: Record<string, { measurementId: string | null; status: string; steps: { op: string }[] }> }[];
     };
     expect(json.version).toBe('0.4.0');
-    expect(json.datasetSchemaVersion).toBe('1.0');
+    expect(json.datasetSchemaVersion).toBe('1.1');
     const a = json.products.find((p) => p.id === 'a')!;
     expect(a.provenance['power']!.measurementId).toBe('m-a-power');
     expect(a.provenance['power']!.steps.map((s) => s.op)).toEqual(['select-measurement', 'unit-convert', 'normalize']);
@@ -423,6 +433,139 @@ describe('pairing', () => {
 });
 
 describe('sources and evidence view', () => {
+  it('counts reference-only and range-only citations and shows their missing-URL warnings', () => {
+    const lab = DEMO_DATASET.sources.find((s) => s.kind === 'independent-lab')!;
+    const manufacturer = DEMO_DATASET.sources.find((s) => s.kind === 'manufacturer')!;
+    const referenceSourceId = 'reference-only-source';
+    const rangeSourceId = 'range-only-source';
+    const reference = {
+      id: 'reference-only-power', productId: 'a', metric: 'power' as const, sourceId: referenceSourceId,
+      quantities: ['output power'], conditions: {}, status: 'observed' as const, accessedAt: '2026-11-08', notes: null,
+    };
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      products: [
+        ...DEMO_DATASET.products,
+        { ...DEMO_DATASET.products[0]!, id: 'citation-speaker', category: 'speaker', name: 'Citation Speaker（架空）', features: [] },
+      ],
+      sources: [
+        ...DEMO_DATASET.sources,
+        { ...lab, id: referenceSourceId, url: null },
+        { ...manufacturer, id: rangeSourceId, url: '   ' },
+      ],
+      references: [reference, { ...reference, id: 'reference-only-thdn', metric: 'thdn', quantities: ['distortion and noise'] }],
+      ranges: [{
+        id: 'range-only-response', productId: 'citation-speaker', metric: 'frequencyRange',
+        lowHz: 47, highHz: 45000, toleranceDb: -6, toleranceKind: 'minus',
+        status: 'manufacturer', sourceId: rangeSourceId, conditions: {}, capturedAt: null, version: 1, notes: null,
+      }],
+    };
+    const prepared = prepareDataset(ds);
+    expect(prepared.errors).toEqual([]);
+    document.body.innerHTML = body;
+    initApp(prepared);
+    expect(el('#sourcesTable thead th:nth-child(10)').textContent).toBe('参照数');
+    for (const [sourceId, count] of [[referenceSourceId, '2'], [rangeSourceId, '1']] as const) {
+      expect(ds.measurements.some((m) => m.sourceId === sourceId)).toBe(false);
+      const row = el(`#sourcesTable tr[data-source-id="${sourceId}"]`);
+      expect(row.querySelectorAll('td')[9]!.textContent).toBe(count);
+      expect(row.querySelector('[data-issue="source.url-missing"]')).not.toBeNull();
+      expect(row.querySelector('[data-issue="source.unreferenced"]')).toBeNull();
+      expect(row.querySelector('a')).toBeNull();
+    }
+  });
+
+  it.each([
+    'x" onerror="alert(1)',
+    'x" onerror="alert(1)"><img src=x onerror="alert(1)">',
+  ])('escapes hostile reuse attributes and fallback labels: %s', (hostile) => {
+    // A source-only fixture: the public renderer must refuse it (gate), and the unchecked renderer must still escape it.
+    const source = DEMO_DATASET.sources[0]!;
+    const ds: Dataset = {
+      ...DEMO_DATASET, products: [], measurements: [], references: [], ranges: [],
+      sources: [{
+        ...source,
+        reuse: { ...source.reuse, quoteFacts: hostile as unknown as ReusePermission, checkedAt: null },
+      }],
+    };
+    const prepared = prepareDataset(ds);
+    expect(prepared.usable).toBe(false);
+    expect(prepared.errors).toEqual([expect.objectContaining({ code: 'source.reuse-value-invalid' })]);
+    const before = el('#sourcesView').innerHTML;
+    expect(() => renderSources(prepared)).toThrow(/source\.reuse-value-invalid/);
+    expect(el('#sourcesView').innerHTML).toBe(before);
+    renderSourcesUnchecked(prepared);
+    expect(document.querySelectorAll('[onerror]')).toHaveLength(0);
+    expect(document.querySelectorAll('#sourcesView img, #sourcesView script')).toHaveLength(0);
+    expect(document.querySelectorAll('#sourcesTable tbody tr')).toHaveLength(1);
+    expect(document.querySelectorAll('#sourcesTable td')).toHaveLength(12);
+    expect(document.querySelectorAll('td[data-reuse]')).toHaveLength(1);
+    const cell = el('td[data-reuse]');
+    expect(cell.getAttribute('data-reuse')).toBe(hostile);
+    expect(cell.textContent).toBe(hostile);
+    expect(cell.children).toHaveLength(0);
+  });
+
+  it.each(['reference', 'range'] as const)('rejects a hostile %s status at the gate and escapes it in the unchecked renderer', (kind) => {
+    const hostile = 'observed" onmouseover="alert(1)';
+    const amp = DEMO_DATASET.products[0]!;
+    const source = DEMO_DATASET.sources[0]!;
+    const speaker = { ...amp, id: 'spk-hostile', name: 'Hostile speaker（架空）', category: 'speaker' as const, features: [] };
+    const ref: MeasurementReference = {
+      id: 'ref-hostile', productId: amp.id, metric: 'power', sourceId: source.id, quantities: ['output power'],
+      conditions: {}, status: hostile as unknown as MeasurementReference['status'], accessedAt: '2026-11-08', notes: null,
+    };
+    const range: RangeMeasurement = {
+      id: 'range-hostile', productId: speaker.id, metric: 'frequencyRange', lowHz: 47, highHz: 45000, toleranceDb: -6,
+      toleranceKind: 'minus', status: hostile as unknown as RangeMeasurement['status'], sourceId: source.id,
+      conditions: {}, capturedAt: null, version: 1, notes: null,
+    };
+    const ds: Dataset = kind === 'reference'
+      ? { ...DEMO_DATASET, references: [ref] }
+      : { ...DEMO_DATASET, products: [...DEMO_DATASET.products, speaker], ranges: [range] };
+    const prepared = prepareDataset(ds);
+    expect(prepared.usable).toBe(false);
+    expect(prepared.errors.map((e) => e.code)).toEqual([`${kind}.status-invalid`]);
+    const before = el('#sourcesView').innerHTML;
+    expect(() => renderSources(prepared)).toThrow(new RegExp(`${kind}\\.status-invalid`));
+    expect(el('#sourcesView').innerHTML).toBe(before);
+    expect(() => initApp(prepared)).toThrow(new RegExp(`${kind}\\.status-invalid`));
+    // Projection asserts the gate too, so simulate a bypassed gate to prove the markup itself is escaped.
+    renderSourcesUnchecked({ ...prepared, usable: true, errors: [] });
+    expect(document.querySelectorAll('[onmouseover]')).toHaveLength(0);
+    const row = el(`tr[data-${kind}-id]`);
+    expect(row.getAttribute('data-status')).toBe(kind === 'reference' ? 'reference' : hostile);
+    const pill = el(`tr[data-${kind}-id] .status-pill`);
+    expect(pill.getAttribute('data-status')).toBe(hostile);
+    expect(pill.textContent).toBe(hostile);
+    expect(pill.children).toHaveLength(0);
+  });
+
+  it('the catalog and comparison views refuse an unusable dataset even on their empty paths', () => {
+    const unusable = prepareDataset({ ...DEMO_DATASET, schemaVersion: '0.9', products: [], measurements: [], references: [], ranges: [] } as unknown as Dataset);
+    expect(unusable.usable).toBe(false);
+    const records = el('#records').innerHTML;
+    const comparison = el('#comparison').innerHTML;
+    expect(() => initCatalog(unusable)).toThrow(/dataset\.schema-version/);
+    expect(() => renderCompare([], WEIGHT_PRESETS.balanced, unusable)).toThrow(/dataset\.schema-version/);
+    expect(() => renderCompare(['a', 'b'], WEIGHT_PRESETS.balanced, unusable)).toThrow(/dataset\.schema-version/);
+    expect(el('#records').innerHTML).toBe(records);
+    expect(el('#comparison').innerHTML).toBe(comparison);
+  });
+
+  it('rejects an invalid reuse permission at app startup even when there are no products', () => {
+    const invalid = 'x" onerror="alert(1)' as unknown as ReusePermission;
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      sources: DEMO_DATASET.sources.map((s, i) => i === 0 ? { ...s, reuse: { ...s.reuse, quoteFacts: invalid } } : s),
+    };
+    expect(() => initApp(prepareDataset(ds))).toThrow(/source.reuse-value-invalid/);
+    const sourceOnly = prepareDataset({ ...ds, products: [], measurements: [], references: [], ranges: [] });
+    expect(sourceOnly.usable).toBe(false);
+    expect(sourceOnly.errors).toEqual([expect.objectContaining({ code: 'source.reuse-value-invalid' })]);
+    expect(() => initApp(sourceOnly)).toThrow(/source.reuse-value-invalid/);
+  });
+
   it('lists every source with kind, URL state, access date and citation count', () => {
     const rows = Array.from(document.querySelectorAll<HTMLElement>('#sourcesTable tbody tr'));
     expect(rows).toHaveLength(7);
@@ -432,10 +575,10 @@ describe('sources and evidence view', () => {
     expect(cells[3]).toBe('未記録');
     expect(cells[5]).toBe('2026-11-08');
     expect(cells[6]).toBe('未記録'); // licence
-    expect(cells[7]).toBe('3');
+    expect(cells[9]).toBe('3');
     expect(lab.querySelector('[data-issue="source.url-missing"]')).not.toBeNull();
     expect(document.querySelectorAll('#sourcesTable a')).toHaveLength(0);
-    expect(document.querySelectorAll('#sourcesTable thead th[scope="col"]')).toHaveLength(10);
+    expect(document.querySelectorAll('#sourcesTable thead th[scope="col"]')).toHaveLength(12);
   });
 
   it('shows per-metric value, evidence status, source, conditions, uncertainty and warnings for each product', () => {
@@ -472,7 +615,8 @@ describe('sources and evidence view', () => {
   it('summarises the quality warnings by code with counts', () => {
     const rows = Array.from(document.querySelectorAll<HTMLElement>('#issuesTable tbody tr'));
     const byCode = Object.fromEntries(rows.map((r) => [r.dataset['issueCode'], Number(r.querySelector('.issue-count')!.textContent)]));
-    expect(byCode).toEqual({ 'measurement.required-condition-unrecorded': 10, 'source.url-missing': 7 });
+    // Schema 1.1: 6 power (distortion criterion) + 5 THD+N + 5 S/N unrecorded conditions; 7 sources without URL.
+    expect(byCode).toEqual({ 'measurement.required-condition-unrecorded': 16, 'source.url-missing': 7 });
     expect(el('#sources .demo-label').textContent).toBe('DEMO DATA');
   });
 
@@ -512,6 +656,80 @@ describe('sources and evidence view', () => {
     expect(ghost).toHaveLength(4);
     expect(ghost.every((r) => r.dataset['status'] === 'missing')).toBe(true);
     expect(ghost[0]!.querySelector('th')!.querySelector('[data-issue="product.no-measurements"]')).not.toBeNull();
+  });
+
+  it('shows speaker metrics (not amplifier metrics) for a fictional speaker product', () => {
+    const base = DEMO_DATASET.measurements[0]!;
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      products: [
+        ...DEMO_DATASET.products,
+        { ...DEMO_DATASET.products[0]!, id: 'spk', name: 'Demo Speaker（架空）', category: 'speaker', features: [] },
+      ],
+      measurements: [
+        ...DEMO_DATASET.measurements,
+        {
+          ...base,
+          id: 'm-spk-sens',
+          productId: 'spk',
+          metric: 'sensitivity',
+          value: 85,
+          unit: 'dB',
+          conditions: { sensitivityReference: '2.83V/1m', distanceM: 1, averaging: 'mean', averagingBandHz: [300, 3000], environment: 'anechoic', instrument: 'Demo NFS（架空）' },
+        },
+        { ...base, id: 'm-spk-znom', productId: 'spk', metric: 'nominalImpedance', value: 8, unit: 'Ω', conditions: {} },
+      ],
+    };
+    document.body.innerHTML = body;
+    initApp(prepareDataset(ds));
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('#evidenceTable tr[data-product-id="spk"]'));
+    expect(rows.map((r) => r.dataset['metric'])).toEqual(['price', 'sensitivity', 'nominalImpedance', 'minimumImpedance', 'crossoverFrequency']);
+    const sens = rows.find((r) => r.dataset['metric'] === 'sensitivity')!;
+    expect(sens.textContent).toContain('85 dB');
+    expect(sens.textContent).toContain('感度基準: 2.83V/1m');
+    expect(sens.textContent).toContain('平均帯域: 300–3000 Hz');
+    expect(sens.textContent).toContain('測定距離: 1 m');
+    expect(rows.find((r) => r.dataset['metric'] === 'minimumImpedance')!.dataset['status']).toBe('missing');
+    // Amplifier metrics are not listed for a speaker, and the catalog still scores only the four amplifier metrics.
+    expect(rows.some((r) => r.dataset['metric'] === 'power')).toBe(false);
+  });
+
+  it('shows value-less measurement references, range specifications and reuse status (schema 1.1)', () => {
+    const base = DEMO_DATASET.measurements[0]!;
+    const labSrc = DEMO_DATASET.sources[0]!;
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      products: [...DEMO_DATASET.products, { ...DEMO_DATASET.products[0]!, id: 'spk', name: 'Demo Speaker（架空）', category: 'speaker', features: [] }],
+      sources: [
+        ...DEMO_DATASET.sources,
+        { ...labSrc, id: 'EXT-LAB', publisher: 'External Lab（架空）', url: 'https://example.test/measurements', tier: 'primary', reuse: { ...labSrc.reuse, quoteFacts: 'unknown', reproduceFigures: 'unknown', storeRawData: 'unknown', redistribute: 'unknown', basis: null, checkedAt: null } },
+      ],
+      measurements: [
+        ...DEMO_DATASET.measurements,
+        { ...base, id: 'm-spk-znom', productId: 'spk', metric: 'nominalImpedance', value: 8, unit: 'Ω', conditions: {} },
+      ],
+      references: [
+        { id: 'ref-spk-sens', productId: 'spk', metric: 'sensitivity', sourceId: 'EXT-LAB', quantities: ['感度', 'インピーダンス振幅と位相'], conditions: { environment: 'anechoic', instrument: 'Demo NFS（架空）' }, status: 'observed', accessedAt: '2026-11-08', notes: null },
+      ],
+      ranges: [
+        { id: 'rng-spk-fr', productId: 'spk', metric: 'frequencyRange', lowHz: 47, highHz: 45000, toleranceDb: -6, toleranceKind: 'minus', status: 'manufacturer', sourceId: 'DEMO-MFG-001', conditions: {}, capturedAt: null, version: 1, notes: null },
+      ],
+    };
+    document.body.innerHTML = body;
+    initApp(prepareDataset(ds));
+    const ref = el<HTMLElement>('#evidenceTable tr[data-reference-id="ref-spk-sens"]');
+    expect(ref.textContent).toContain('出典で確認');
+    expect(ref.textContent).toContain('所在のみ');
+    expect(ref.textContent).not.toMatch(/\d+(\.\d+)? dB/);
+    expect(ref.querySelector('a')!.getAttribute('href')).toBe('https://example.test/measurements');
+    const rng = el<HTMLElement>('#evidenceTable tr[data-range-id="rng-spk-fr"]');
+    expect(rng.textContent).toContain('47–45000 Hz（-6 dB）');
+    const srcRow = el<HTMLElement>('#sourcesTable tr[data-source-id="EXT-LAB"]');
+    expect(srcRow.querySelector('[data-reuse]')!.getAttribute('data-reuse')).toBe('unknown');
+    expect(srcRow.textContent).toContain('未確認');
+    expect(el('#sourcesTable tr[data-source-id="DEMO-LAB-001"] [data-reuse]').textContent).toContain('引用可');
+    const header = el<HTMLElement>('#evidenceTable tbody[data-product-id="spk"] th');
+    expect(header.getAttribute('rowspan')).toBe(String(document.querySelectorAll('#evidenceTable tbody[data-product-id="spk"] tr').length));
   });
 
   it('escapes source and product text', () => {

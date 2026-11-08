@@ -8,6 +8,19 @@
 import type { MeasurementConditions } from '../types.ts';
 import type { Dataset, Measurement, MeasurementStatus, MetricId, Product, Source, Unit } from './types.ts';
 import { DATASET_SCHEMA_VERSION } from './types.ts';
+import type { SourceReuse } from './types.ts';
+
+const CAPTURED_DATE = '2026-11-08';
+
+/** Fictional data carries no third-party rights; marked allowed so the gate exercises the permitted path. */
+const DEMO_REUSE: SourceReuse = {
+  quoteFacts: 'allowed',
+  reproduceFigures: 'allowed',
+  storeRawData: 'allowed',
+  redistribute: 'allowed',
+  basis: 'fictional demonstration data authored by this project',
+  checkedAt: CAPTURED_DATE,
+};
 
 /**
  * The demo assumes all amplifier figures share one measurement condition set.
@@ -21,13 +34,13 @@ export const DEMO_CONDITIONS: MeasurementConditions = {
   method: 'demo-assumed-identical',
 };
 
-const CAPTURED = '2026-11-08';
+const CAPTURED = CAPTURED_DATE;
 
 function source(id: string, kind: Source['kind'], publisher: string, notes: string): Source {
-  return { id, kind, publisher, url: null, publishedAt: null, accessedAt: CAPTURED, license: null, notes, archiveRef: null };
+  return { id, kind, publisher, url: null, publishedAt: null, accessedAt: CAPTURED, license: null, notes, archiveRef: null, tier: 'primary', reuse: DEMO_REUSE };
 }
 
-const UNIT: Record<MetricId, Unit> = { price: 'JPY', power: 'W', thdn: '%', snr: 'dB' };
+const UNIT: Record<MetricId, Unit> = { price: 'JPY', power: 'W', thdn: '%', snr: 'dB', sensitivity: 'dB', nominalImpedance: 'Ω', minimumImpedance: 'Ω', crossoverFrequency: 'Hz' };
 
 function measurement(
   productId: string,
@@ -54,7 +67,7 @@ function measurement(
 }
 
 function product(id: string, name: string, subtitle: string, features: Product['features']): Product {
-  return { id, maker: 'Demo Audio（架空）', model: name, revision: null, category: 'integrated-amplifier', name, subtitle, features, fictional: true };
+  return { id, maker: 'Demo Audio（架空）', model: name, revision: null, category: 'integrated-amplifier', name, subtitle, features, region: null, dimensionsMm: null, massKg: null, fictional: true };
 }
 
 const products: Product[] = [

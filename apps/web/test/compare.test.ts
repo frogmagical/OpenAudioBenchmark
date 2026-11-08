@@ -4,7 +4,15 @@ import { DEMO_DATASET, PREPARED_DEMO_DATASET, WEIGHT_PRESETS, prepareDataset } f
 import type { Dataset, Measurement, MeasurementConditions } from '@openaudiobenchmark/core';
 import { NO_SELECTION_TEXT, WITHHELD_TEXT, renderCompare } from '../src/views/compare.ts';
 
-const FULL: MeasurementConditions = { ...DEMO_DATASET.measurements[0]!.conditions, outputLevel: '1 W', weighting: 'A' };
+// Schema 1.1: a "fully conditioned" amplifier figure also states the distortion criterion of the rating (G6)
+// and the instrument (comparison-required, D-03).
+const FULL: MeasurementConditions = {
+  ...DEMO_DATASET.measurements[0]!.conditions,
+  outputLevel: '1 W',
+  weighting: 'A',
+  distortionCriterion: 'THD+N 1 %',
+  instrument: 'Demo Analyzer（架空）',
+};
 
 /** Demo dataset with every measurement fully conditioned and with stated uncertainty, optionally modified. */
 function conditioned(modify: (m: Measurement) => Measurement = (m) => m): Dataset {
@@ -40,15 +48,17 @@ describe('renderCompare', () => {
     expect(document.querySelector('#comparison')!.textContent).toBe(NO_SELECTION_TEXT);
   });
 
-  it('demo data: power comparable with caveats, THD+N and S/N withheld for unrecorded required conditions', () => {
+  it('demo data (schema 1.1): power, THD+N and S/N are all withheld — distortion criterion and instrument are unrecorded', () => {
     renderCompare(['a', 'b'], WEIGHT_PRESETS.balanced, PREPARED_DEMO_DATASET);
     expect(reasonItems()).toEqual([
-      ['power', 'comparable-with-caveats'],
+      ['power', 'not-comparable'],
       ['thdn', 'not-comparable'],
       ['snr', 'not-comparable'],
     ]);
+    expect(document.querySelector('[data-comparability] li[data-metric="power"]')!.textContent).toContain('歪み基準');
+    expect(document.querySelector('[data-comparability] li[data-metric="power"]')!.textContent).toContain('測定機器');
     expect(document.querySelector('[data-comparability] li[data-metric="thdn"]')!.textContent).toContain('出力レベル');
-    expect(cells('8Ω 出力/ch')).toEqual(['85W', '100W']);
+    expect(cells('8Ω 出力/ch')).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
     expect(cells('THD+N')).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
     expect(cells('S/N')).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
     expect(cells('参考適合度')).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
@@ -93,6 +103,7 @@ describe('renderCompare', () => {
     expect(cells('参考適合度')).toEqual(absentScore);
     expect(reasonItems()).toEqual(absentItems);
     expect(absentItems).toEqual([['thdn', 'not-comparable']]);
+    expect(cells('8Ω 出力/ch')).toEqual(['85W', '100W']);
     expect(absentScore).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
   });
 

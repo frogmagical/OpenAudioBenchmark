@@ -8,8 +8,10 @@ import {
   METRIC_KEYS,
   METRIC_LABELS,
   PREPARED_DEMO_DATASET,
+  assertUsable,
   STATUS_LABELS,
   WEIGHT_PRESETS,
+  isScoringMetric,
   buildCatalogCsv,
   buildCatalogJson,
   calculateUtility,
@@ -20,8 +22,16 @@ import {
   toDemoProduct,
   weightPercentages,
 } from '@openaudiobenchmark/core';
-import type { DemoProduct, FeatureKey, PreparedDataset, PresetKey, Weights } from '@openaudiobenchmark/core';
+import type { DemoProduct, FeatureKey, PreparedDataset, PresetKey, SpeakerMetricId, Weights } from '@openaudiobenchmark/core';
 import { escapeHtml, qs, qsa } from '../dom.ts';
+import { metricsForProduct } from './sources.ts';
+
+const METRIC_NAMES_EXTRA: Readonly<Record<SpeakerMetricId, string>> = {
+  sensitivity: '感度',
+  nominalImpedance: '公称インピーダンス',
+  minimumImpedance: '最小インピーダンス',
+  crossoverFrequency: 'クロスオーバー周波数',
+};
 import { download } from '../download.ts';
 import { fmt, fmtDb, fmtPercent, todayIso } from '../format.ts';
 import { renderCompare } from './compare.ts';
@@ -49,11 +59,13 @@ function isPresetKey(value: string): value is PresetKey {
 function provenanceHtml(prepared: PreparedDataset, productId: string): string {
   const dataset = prepared.dataset;
   const projection = projectProduct(prepared, productId);
-  const rows = METRIC_KEYS.map((k) => {
+  const product = dataset.products.find((p) => p.id === productId)!;
+  const rows = metricsForProduct(product).map((k) => {
     const m = projection.metrics[k];
     const source = m.sourceId ? dataset.sources.find((s) => s.id === m.sourceId) : undefined;
     const sourceText = source ? `${escapeHtml(source.id)}（${escapeHtml(source.publisher)}）` : '出典なし';
-    return `<li data-metric="${k}" data-status="${m.status}">${METRIC_LABELS[k]}：${STATUS_LABELS[m.status]} ／ ${sourceText}</li>`;
+    const label = isScoringMetric(k) ? METRIC_LABELS[k] : METRIC_NAMES_EXTRA[k];
+    return `<li data-metric="${k}" data-status="${escapeHtml(m.status)}">${label}：${escapeHtml(STATUS_LABELS[m.status] ?? String(m.status))} ／ ${sourceText}</li>`;
   }).join('');
   const warnings = projection.issues
     .map((i) => `<li data-issue="${escapeHtml(i.code)}">${escapeHtml(i.message)}</li>`)
@@ -70,6 +82,7 @@ function provenanceHtml(prepared: PreparedDataset, productId: string): string {
  * its measurements, so displayed numbers, scores and provenance share one lineage.
  */
 export function initCatalog(prepared: PreparedDataset = PREPARED_DEMO_DATASET): CatalogController {
+  assertUsable(prepared); // the gate holds even for a dataset with no products
   const products: readonly DemoProduct[] = prepared.dataset.products.map((p) => toDemoProduct(prepared, p.id));
   let weights: Weights = { ...WEIGHT_PRESETS[DEFAULT_PRESET] };
   let selected: string[] = [];

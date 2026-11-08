@@ -12,6 +12,13 @@ export const CONDITION_KEYS: readonly (keyof MeasurementConditions)[] = [
   'method',
   'outputLevel',
   'weighting',
+  'instrument',
+  'testSignal',
+  'averaging',
+  'averagingBandHz',
+  'distortionCriterion',
+  'sensitivityReference',
+  'distanceM',
 ];
 
 function equalValues(left: unknown, right: unknown): boolean {
