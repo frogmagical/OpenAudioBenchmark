@@ -38,7 +38,7 @@ Methodology version `0.4.0-demo` reproduces the prototype's formulas, bounds and
 | --- | --- | --- | --- |
 | THD+N = 0 or negative | `log10(0)` → score 100 / NaN | `null` (missing) | Non-positive distortion is not a measurement |
 | Negative price, power or S/N | price → 100, power/S-N → 0 | `null` (missing) | Physically impossible values are treated as unknown |
-| Price = 0 | score 100 | score 100 (unchanged) | Kept for parity; see open question below |
+| Price = 0 | score 100 | `null` (missing) since 0.5.0-demo | Product-owner decision 2026-11-08 (ADR-0003) |
 | Budget field empty or 0 | no limit (`+v \|\| Infinity`) | no limit (web maps to `null`) | Parity |
 | Budget negative | nothing passes | nothing passes | Parity |
 | Product with unknown price under a budget | included (`null <= max` is true) | excluded | Unknown price cannot be proven affordable |
@@ -49,10 +49,18 @@ Methodology version `0.4.0-demo` reproduces the prototype's formulas, bounds and
 | CSV cell for a `null` price/power | `"null"` | `""` | Missing is empty, not the string "null" |
 | CSV string cell starting with `= + - @ TAB CR` | written verbatim | prefixed with `'` | Spreadsheet formula-injection guard |
 | JSON export `date` | fixed `2026-11-08` | actual export date | Bug fix |
-| JSON export shape | `version 0.1.0`, `computed: {coverage, score}` | `version 0.2.0`, `computed` adds status, metric scores, weights used and `methodologyVersion`; products carry provenance and `fictional: true` | Traceability |
+| JSON export shape | `version 0.1.0`, `computed: {coverage, score}` | `version 0.3.0`, `computed` adds status, metric scores, weights used, `methodologyVersion` and `provisionalScore`; products carry provenance and `fictional: true` | Traceability |
+| JSON `computed.score` below the coverage gate | numeric | `null` since 0.5.0-demo (`provisionalScore` keeps the internal ordering value) | Product-owner decision 2026-11-08 (ADR-0003) |
 
-Open questions for the product owner (no change made; proposals only):
+Convention note: 2.83 V ≙ 1 W into 8 Ω (2.83² = 8.0089 W, a 0.005 dB difference that is ignored).
 
-- Price = 0 currently scores 100 on the price metric, exactly as in v0.4. In real datasets 0 is a common "unknown" placeholder; treating non-positive prices as missing would be the consistent rule. Decision needed before real data ingestion.
-- Products below the 70 % coverage gate still carry a numeric `score` internally (used for ordering within the pending group, as in v0.4) and in the JSON export's `computed.score`. Consumers must check `computed.status`. Nulling the score in exports is an option.
-- 2.83 V ≙ 1 W into 8 Ω is used by convention (2.83² = 8.0089 W, a 0.005 dB difference).
+## Methodology 0.5.0-demo (2026-11-08)
+
+First Phase 2 change, decided by the product owner after the Phase 1 review (ADR-0003). Everything else is identical to 0.4.0-demo.
+
+| Change | 0.4.0-demo | 0.5.0-demo |
+| --- | --- | --- |
+| Reference price of 0 JPY | valid value, price score 100 | invalid data: price score `null`, excluded from the denominator, coverage drops accordingly. Genuinely free products will get an explicit representation later. |
+| Published JSON `computed.score` when coverage < 70 % | numeric (same value the ranking uses) | `null`. The internal ordering value is published as `computed.provisionalScore` and is not a rating. |
+| UI | unchanged: 比較保留 / `—` below the gate | unchanged |
+| Export format version | 0.2.0 | 0.3.0 |

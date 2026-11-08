@@ -5,11 +5,34 @@
 import { FICTIONAL_DATA_NOTICE } from './fixtures.ts';
 import { METHODOLOGY_VERSION } from './methodology.ts';
 import { calculateUtility } from './scoring.ts';
-import type { DemoProduct, Weights } from './types.ts';
+import type { DemoProduct, UtilityResult, Weights } from './types.ts';
 
 /** Column headers of the catalog CSV, in order. */
-/** Export-format version. 0.1.0 was the prototype's `{coverage, score}` shape; 0.2.0 adds status, metric scores, provenance and methodologyVersion. */
-export const CATALOG_JSON_VERSION = '0.2.0' as const;
+/**
+ * Export-format version. 0.1.0 was the prototype's `{coverage, score}` shape; 0.2.0 added status,
+ * metric scores, provenance and methodologyVersion; 0.3.0 withholds `score` below the coverage gate
+ * and adds `provisionalScore`.
+ */
+export const CATALOG_JSON_VERSION = '0.3.0' as const;
+
+/**
+ * Utility result as published in the JSON export. `score` is `null` unless the
+ * product passed the coverage gate (methodology 0.5.0-demo); the number the
+ * ranking uses internally is exposed separately as `provisionalScore`.
+ */
+export interface ExportedUtility extends Omit<UtilityResult, 'score'> {
+  readonly score: number | null;
+  /** Internal ordering value, present even when `score` is withheld. Not a published rating. */
+  readonly provisionalScore: number | null;
+}
+
+export function toExportedUtility(result: UtilityResult): ExportedUtility {
+  return {
+    ...result,
+    score: result.status === 'scored' ? result.score : null,
+    provisionalScore: result.score,
+  };
+}
 
 export const CATALOG_CSV_HEADER: readonly string[] = [
   '製品',
@@ -67,7 +90,7 @@ export function buildCatalogCsv(products: readonly DemoProduct[], weights: Weigh
 /**
  * Pretty-printed (2-space) JSON:
  * `{ notice: FICTIONAL_DATA_NOTICE, version: CATALOG_JSON_VERSION, methodologyVersion, date, weights,
- *    products: products.map(p => ({ ...p, computed: calculateUtility(p, weights) })) }`.
+ *    products: products.map(p => ({ ...p, computed: toExportedUtility(calculateUtility(p, weights)) })) }`.
  * `version` is the export-format version (see CATALOG_JSON_VERSION).
  */
 export function buildCatalogJson(
@@ -81,6 +104,6 @@ export function buildCatalogJson(
     methodologyVersion: METHODOLOGY_VERSION,
     date: options.date,
     weights,
-    products: products.map(product => ({ ...product, computed: calculateUtility(product, weights) })),
+    products: products.map(product => ({ ...product, computed: toExportedUtility(calculateUtility(product, weights)) })),
   }, null, 2);
 }

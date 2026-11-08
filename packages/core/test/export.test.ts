@@ -49,11 +49,12 @@ describe('JSON export', () => {
     const parsed = JSON.parse(text);
     expect(text).toBe(JSON.stringify(parsed, null, 2));
     expect(parsed).toEqual({
-      notice: 'FICTIONAL DEMO DATA ONLY', version: '0.2.0', methodologyVersion: '0.4.0-demo',
+      notice: 'FICTIONAL DEMO DATA ONLY', version: '0.3.0', methodologyVersion: '0.5.0-demo',
       date: '2026-11-08', weights,
       products: [{ ...product, computed: {
-        score: expect.closeTo(55.4924428138, 8), coverage: 1, usedWeight: 100, totalWeight: 100,
-        status: 'scored', methodologyVersion: '0.4.0-demo',
+        score: expect.closeTo(55.4924428138, 8), provisionalScore: expect.closeTo(55.4924428138, 8),
+        coverage: 1, usedWeight: 100, totalWeight: 100,
+        status: 'scored', methodologyVersion: '0.5.0-demo',
         metricScores: { price: 67.5, power: expect.closeTo(6500 / 140, 8), thdn: expect.closeTo(100 * (-1 - Math.log10(0.005)) / 3, 8), snr: 70 },
       } }],
     });
@@ -63,7 +64,7 @@ describe('JSON export', () => {
     const parsed = JSON.parse(buildCatalogJson(DEMO_PRODUCTS, weights, { date: 'supplied-date' }));
     expect(parsed.date).toBe('supplied-date');
     expect(parsed.products.map((p: { id: string }) => p.id)).toEqual(DEMO_PRODUCTS.map(p => p.id));
-    for (const p of parsed.products) expect(p.computed.methodologyVersion).toBe('0.4.0-demo');
+    for (const p of parsed.products) expect(p.computed.methodologyVersion).toBe('0.5.0-demo');
     expect(parsed.products[4]).toMatchObject({ thdn: null, computed: { metricScores: { thdn: null }, coverage: 0.7 } });
     expect(parsed.products[5]).toMatchObject({ snr: null, computed: { metricScores: { snr: null }, coverage: 0.8 } });
   });
@@ -71,8 +72,21 @@ describe('JSON export', () => {
   it('serializes no-score results as null and supports an empty selection', () => {
     const zero = { price: 0, power: 0, thdn: 0, snr: 0 };
     const parsed = JSON.parse(buildCatalogJson([product], zero, { date: '2026-11-08' }));
-    expect(parsed.products[0].computed).toMatchObject({ score: null, coverage: 0, status: 'pending' });
+    expect(parsed.products[0].computed).toMatchObject({ score: null, provisionalScore: null, coverage: 0, status: 'pending' });
     expect(JSON.parse(buildCatalogJson([], weights, { date: '2026-11-08' })).products).toEqual([]);
+  });
+
+  it('withholds the published score below the coverage gate but keeps the internal value separately', () => {
+    // Compact Amp E has no THD+N; with these weights its coverage is 10/55 ≈ 18 %, and only S/N (92 dB → 44) is scored.
+    const thdHeavy = { price: 0, power: 0, thdn: 45, snr: 10 };
+    const parsed = JSON.parse(buildCatalogJson(DEMO_PRODUCTS, thdHeavy, { date: '2026-11-08' }));
+    const e = parsed.products.find((p: { id: string }) => p.id === 'e');
+    expect(e.computed.status).toBe('pending');
+    expect(e.computed.score).toBeNull();
+    expect(e.computed.provisionalScore).toBeCloseTo(44, 10);
+    const a = parsed.products.find((p: { id: string }) => p.id === 'a');
+    expect(a.computed.status).toBe('scored');
+    expect(a.computed.score).toBe(a.computed.provisionalScore);
   });
 });
 

@@ -9,7 +9,7 @@ const product = DEMO_PRODUCTS[0]!;
 
 describe('normalization', () => {
   it.each<[MetricKey, number, number]>([
-    ['price', 0, 100], ['price', 20000, 100], ['price', 60000, 50],
+    ['price', 1, 100], ['price', 20000, 100], ['price', 60000, 50],
     ['price', 100000, 0], ['price', 200000, 0],
     ['power', 0, 0], ['power', 20, 0], ['power', 90, 50],
     ['power', 160, 100], ['power', 300, 100],
@@ -34,6 +34,21 @@ describe('normalization', () => {
     expect(normalize(0, METRIC_BOUNDS.thdn)).toBeNull();
   });
 
+  it('treats a price of 0 as invalid data, not as the best price (methodology 0.5.0-demo)', () => {
+    expect(normalize(0, METRIC_BOUNDS.price)).toBeNull();
+    expect(metricScore({ ...product, price: 0 }, 'price')).toBeNull();
+    const result = calculateUtility({ ...product, price: 0 }, WEIGHT_PRESETS.balanced);
+    expect(result.metricScores.price).toBeNull();
+    expect(result.coverage).toBe(0.75);
+    expect(result.usedWeight).toBe(75);
+  });
+
+  it('still scores 0 W and 0 dB as the bottom of their ranges (requirePositive is per metric)', () => {
+    expect(normalize(0, METRIC_BOUNDS.power)).toBe(0);
+    expect(normalize(0, METRIC_BOUNDS.snr)).toBe(0);
+    expect(normalize(0, { ...METRIC_BOUNDS.power, requirePositive: true })).toBeNull();
+  });
+
   it('returns unknown for invalid bounds instead of NaN/Infinity', () => {
     for (const [min, max] of [[1, 1], [2, 1], [NaN, 1], [0, Infinity]] as const) {
       expect(normalize(1, { ...METRIC_BOUNDS.power, min, max })).toBeNull();
@@ -54,7 +69,7 @@ describe('weighted utility and coverage', () => {
       expect(result.totalWeight).toBe(100);
       expect(result.coverage).toBe(usedWeight / 100);
       expect(result.score).toBeCloseTo(numerator / usedWeight, 10);
-      expect(result.methodologyVersion).toBe('0.4.0-demo');
+      expect(result.methodologyVersion).toBe('0.5.0-demo');
     },
   );
 
@@ -72,7 +87,7 @@ describe('weighted utility and coverage', () => {
   it('all zero weights give no score and zero display percentages', () => {
     const weights = { price: 0, power: 0, thdn: 0, snr: 0 };
     expect(calculateUtility(product, weights)).toMatchObject({
-      totalWeight: 0, usedWeight: 0, coverage: 0, score: null, status: 'pending', methodologyVersion: '0.4.0-demo',
+      totalWeight: 0, usedWeight: 0, coverage: 0, score: null, status: 'pending', methodologyVersion: '0.5.0-demo',
     });
     expect(weightPercentages(weights)).toEqual(weights);
   });
@@ -81,7 +96,7 @@ describe('weighted utility and coverage', () => {
     const unknown: DemoProduct = { ...product, price: null, power: null, thdn: null, snr: null };
     expect(calculateUtility(unknown, WEIGHT_PRESETS.balanced)).toEqual({
       totalWeight: 100, usedWeight: 0, coverage: 0, score: null, status: 'pending',
-      metricScores: { price: null, power: null, thdn: null, snr: null }, methodologyVersion: '0.4.0-demo',
+      metricScores: { price: null, power: null, thdn: null, snr: null }, methodologyVersion: '0.5.0-demo',
     });
   });
 
@@ -107,7 +122,7 @@ describe('weighted utility and coverage', () => {
     for (const fixture of DEMO_PRODUCTS) {
       for (const preset of Object.values(WEIGHT_PRESETS)) {
         const result = calculateUtility(Object.freeze({ ...fixture }), Object.freeze({ ...preset }));
-        expect(result.methodologyVersion).toBe('0.4.0-demo');
+        expect(result.methodologyVersion).toBe('0.5.0-demo');
         expect(result.coverage).toBeGreaterThanOrEqual(0);
         expect(result.coverage).toBeLessThanOrEqual(1);
         expect(Number.isFinite(result.score)).toBe(true);
