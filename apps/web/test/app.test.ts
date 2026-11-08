@@ -70,7 +70,7 @@ beforeEach(() => {
 });
 
 describe('navigation', () => {
-  it('renders six views with the overview active and a six-item sidebar', () => {
+  it('renders the six v0.4 views plus the sources view, overview active, seven-item sidebar', () => {
     const views = Array.from(document.querySelectorAll<HTMLElement>('.view'));
     expect(views.map((v) => v.dataset['view'])).toEqual([
       'overview',
@@ -79,10 +79,11 @@ describe('navigation', () => {
       'pairing',
       'methodology',
       'principles',
+      'sources',
     ]);
     expect(views.filter((v) => v.classList.contains('active')).map((v) => v.id)).toEqual(['overview']);
     expect(views.filter((v) => !v.hidden).map((v) => v.id)).toEqual(['overview']);
-    expect(document.querySelectorAll('.app-sidebar .menu-button')).toHaveLength(6);
+    expect(document.querySelectorAll('.app-sidebar .menu-button')).toHaveLength(7);
     expect(el('.app-sidebar').getAttribute('aria-label')).toBeTruthy();
   });
 
@@ -418,6 +419,66 @@ describe('pairing', () => {
 
     setValue('#pairPeak', '95');
     expect(hero().dataset['verdict']).toBe('positive');
+  });
+});
+
+describe('sources and evidence view', () => {
+  it('lists every source with kind, URL state, access date and citation count', () => {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('#sourcesTable tbody tr'));
+    expect(rows).toHaveLength(7);
+    const lab = rows.find((r) => r.dataset['sourceId'] === 'DEMO-LAB-001')!;
+    const cells = Array.from(lab.querySelectorAll('td')).map((c) => c.textContent);
+    expect(cells[1]).toBe('第三者測定機関');
+    expect(cells[3]).toBe('未記録');
+    expect(cells[5]).toBe('2026-11-08');
+    expect(cells[7]).toBe('3');
+    expect(document.querySelectorAll('#sourcesTable a')).toHaveLength(0);
+  });
+
+  it('shows per-metric value, evidence status, source, conditions, uncertainty and warnings for each product', () => {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('#evidenceTable tbody tr'));
+    expect(rows).toHaveLength(6 * 4);
+    const ePower = rows.find((r) => r.dataset['productId'] === 'e' && r.dataset['metric'] === 'power')!;
+    expect(ePower.dataset['status']).toBe('manufacturer');
+    expect(ePower.textContent).toContain('40 W');
+    expect(ePower.textContent).toContain('DEMO-MFG-005');
+    expect(ePower.textContent).toContain('負荷インピーダンス: 8 Ω');
+    expect(ePower.textContent).toContain('未記録'); // uncertainty unstated
+    const eThdn = rows.find((r) => r.dataset['productId'] === 'e' && r.dataset['metric'] === 'thdn')!;
+    expect(eThdn.dataset['status']).toBe('missing');
+    expect(eThdn.querySelector('.status-pill')!.textContent).toBe('未測定');
+    expect(eThdn.textContent).not.toContain('0 %');
+    const aSnr = rows.find((r) => r.dataset['productId'] === 'a' && r.dataset['metric'] === 'snr')!;
+    expect(aSnr.dataset['status']).toBe('observed');
+    expect(aSnr.textContent).toContain('weighting');
+    const statuses = new Set(rows.map((r) => r.dataset['status']));
+    expect(statuses).toEqual(new Set(['observed', 'manufacturer', 'missing']));
+  });
+
+  it('summarises the quality warnings by code with counts', () => {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('#issuesTable tbody tr'));
+    const byCode = Object.fromEntries(rows.map((r) => [r.dataset['issueCode'], Number(r.querySelector('.issue-count')!.textContent)]));
+    expect(byCode).toEqual({ 'measurement.required-condition-unrecorded': 10, 'source.url-missing': 7 });
+    expect(el('#sources .demo-label').textContent).toBe('DEMO DATA');
+  });
+
+  it('navigates from a record\'s details to the sources view via the delegated link', () => {
+    el('.menu-button[data-go="benchmark"]').click();
+    el('#records .record [data-go="sources"]').click();
+    expect(el('#sources').classList.contains('active')).toBe(true);
+    expect(el('#currentView').textContent).toBe('出典・根拠');
+  });
+
+  it('escapes source and product text', () => {
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      sources: DEMO_DATASET.sources.map((s) => (s.id === 'DEMO-LAB-001' ? { ...s, publisher: '<img src=x onerror="alert(1)">', url: 'javascript:alert(1)' } : s)),
+    };
+    document.body.innerHTML = body;
+    initApp(prepareDataset(ds));
+    expect(document.querySelectorAll('#sourcesTable img')).toHaveLength(0);
+    expect(document.querySelectorAll('#sourcesTable a')).toHaveLength(0);
+    expect(el('#sourcesTable').textContent).toContain('<img src=x onerror="alert(1)">');
   });
 });
 

@@ -1,4 +1,4 @@
-/** Six-view navigation with hash routing, ported from the v0.4 prototype. */
+/** View navigation with hash routing, ported from the v0.4 prototype (six views) plus the Phase 2 sources view. */
 import { qs, qsa } from '../dom.ts';
 
 export const VIEW_NAMES = {
@@ -8,6 +8,7 @@ export const VIEW_NAMES = {
   pairing: '相性診断',
   methodology: '評価方法',
   principles: '設計原則',
+  sources: '出典・根拠',
 } as const;
 
 export type ViewName = keyof typeof VIEW_NAMES;
@@ -34,9 +35,11 @@ export function goView(rawName: string): ViewName {
 }
 
 export function initNavigation(): void {
-  for (const el of qsa<HTMLElement>('[data-go]')) {
-    el.addEventListener('click', () => goView(el.dataset['go'] ?? 'overview'));
-  }
+  // Delegated so that links rendered later (e.g. inside catalog record details) navigate too.
+  document.addEventListener('click', (e) => {
+    const el = (e.target as Element | null)?.closest<HTMLElement>('[data-go]');
+    if (el) goView(el.dataset['go'] ?? 'overview');
+  });
   window.addEventListener('hashchange', () => goView(location.hash.slice(1)));
   goView(location.hash.slice(1) || 'overview');
   // Deep links (/#pairing): the browser scrolls to the fragment's section after this module ran,

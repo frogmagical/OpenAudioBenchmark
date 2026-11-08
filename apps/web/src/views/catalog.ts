@@ -60,7 +60,8 @@ function provenanceHtml(prepared: PreparedDataset, productId: string): string {
     .join('');
   return (
     `<p style="margin-top:11px">指標ごとの証拠種別と出典</p><ul class="provenance">${rows}</ul>` +
-    (warnings ? `<p>データ品質の注意</p><ul class="quality-issues">${warnings}</ul>` : '')
+    (warnings ? `<p>データ品質の注意</p><ul class="quality-issues">${warnings}</ul>` : '') +
+    `<p><button type="button" class="inline-link" data-go="sources">出典と測定根拠の一覧を見る →</button></p>`
   );
 }
 
