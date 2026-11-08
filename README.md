@@ -26,6 +26,7 @@ Requirements: Node 22 (`.nvmrc`) and npm 10. No cloud resources, no network acce
 Layout:
 
 - `packages/core` — framework-neutral evaluation logic and the fictional demo fixtures. Every computed result carries `methodologyVersion`.
+- `packages/core/src/model` — provenance data model (products, sources, measurements with status/unit/conditions), projection with lineage, validation and comparability explanations (docs/DATA_MODEL.md, ADR-0004).
 - `apps/web` — the six-view workspace UI (vanilla TypeScript + Vite). Markup and CSS are ported from the prototype; all numbers come from `packages/core`.
 - `prototype/index.html` — immutable v0.4 reference. Never edit; CI checks its hash.
 

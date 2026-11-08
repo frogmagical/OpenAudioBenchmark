@@ -1,10 +1,14 @@
 /** Measurement-condition compatibility (Phase 1 minimal version). */
 import type { ConditionComparison, MeasurementConditions } from './types.ts';
 
-const CONDITION_KEYS: readonly (keyof MeasurementConditions)[] = [
+export const CONDITION_KEYS: readonly (keyof MeasurementConditions)[] = [
   'bandwidthHz',
   'channelsDriven',
+  'environment',
+  'frequencyHz',
+  'inputSignal',
   'loadOhms',
+  'loadType',
   'method',
   'outputLevel',
   'weighting',
@@ -23,12 +27,17 @@ function equalValues(left: unknown, right: unknown): boolean {
  * A key that is unrecorded on one side counts as a mismatch. When nothing is
  * recorded on either side the result is `undetermined`, not compatible:
  * unknown conditions must never be silently assumed identical.
- * Keys are reported in alphabetical order for stable output.
+ * Keys are reported in alphabetical order for stable output. `keys` restricts
+ * the comparison to the conditions relevant for a metric (default: all keys).
  */
-export function compareConditions(a: MeasurementConditions, b: MeasurementConditions): ConditionComparison {
+export function compareConditions(
+  a: MeasurementConditions,
+  b: MeasurementConditions,
+  keys: readonly (keyof MeasurementConditions)[] = CONDITION_KEYS,
+): ConditionComparison {
   const mismatches: (keyof MeasurementConditions)[] = [];
   const shared: (keyof MeasurementConditions)[] = [];
-  for (const key of CONDITION_KEYS) {
+  for (const key of [...keys].sort()) {
     const left = a[key];
     const right = b[key];
     if (left === undefined && right === undefined) continue;
