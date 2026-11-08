@@ -2,7 +2,7 @@
 
 ## 結論
 
-現行モデル(ADR-0004/0005/0006)は、2製品のパイロットに必要な情報の多くを**そのまま表現できる**。モデル拡張が必要なのは次の 8 点(G1〜G8)。
+現行モデル(ADR-0004/0005/0006)は、2製品のパイロットに必要な情報の多くを**そのまま表現できる**。モデル拡張が必要なのは次の 9 点(G1〜G9)。**PL 判定(2026-11-08)**: G1〜G8 の必要性は承認。G5 は `MeasurementReference`(欠測とは別型)案を優先検討。G9(採点適格性)は D-17 選択肢 B の承認に伴い追加。いずれも本工程では実装しない。
 
 | # | 不足 | 影響 | 対応区分 |
 | --- | --- | --- | --- |
@@ -13,9 +13,10 @@
 | G5 | 「値を持たないが出典・条件・リンクを持つ測定」(第三者測定の所在のみ記録、許諾未確認で伏せる値)の置き場がない。`missing` に出典を付けるとエラー(`measurement.source-forbidden`)、参照されない出典は警告 | SOURCE_INVENTORY の「所在・条件・リンクのみ」運用(D-16)と P7 の「伏せる」を表現できない | **拡張必須** |
 | G6 | 定格出力の**歪み基準**(1 % / 0.1 % THD+N など)を保持する条件キーがない。`outputLevel` は「図を取った出力レベル」の意味で、転用は誤用 | 歪み基準が異なる W を別測定として弾けない | **拡張必須** |
 | G7 | `Product` に地域・市場、寸法・質量の項目がない。`FeatureKey` が `hdmi/usb/bt/hp/phono` のアンプ専用列挙で、光・同軸・サブウーファー出力やスピーカーの属性を表せない | 「型番・地域仕様・リビジョン」の同定結果と、LS50 Meta の文書間差(質量・奥行)を記録できない | 拡張推奨(同定記録は `notes` で暫定可) |
-| G8 | `Source` 等の拡張に伴う `DATASET_SCHEMA_VERSION`('1.0')の更新方針がない。ゲートは版不一致をエラーにする | スキーマ変更時に既存データが読めなくなる | 方針決定が必要 |
+| G8 | `Source` 等の拡張に伴う `DATASET_SCHEMA_VERSION`('1.0')の更新方針がない。ゲートは版不一致をエラーにする | スキーマ変更時に既存データが読めなくなる | 方針決定が必要(1.1 へ更新、架空データも同時移行) |
+| G9 | **採点適格性**の概念がない。現行は必須条件未記録の値も投影され採点に入る | D-17(選択肢 B)を実装できない。「欠測」と「値はあるが採点不適格」を区別できない | **拡張必須**(ADR-0007 P9) |
 
-それ以外(出典・証拠種別・条件・不確かさ・系譜・価格観測・インピーダンス特性・品質ゲート)は既存モデルで対応できる。なお、現行の投影は**必須条件が未記録でも値を採用し採点に渡す**(警告のみ)。これを維持するか改めるかは D-17。
+それ以外(出典・証拠種別・条件・不確かさ・系譜・価格観測・インピーダンス特性・品質ゲート)は既存モデルで対応できる。なお、現行の投影は**必須条件が未記録でも値を採用し採点に渡す**(警告のみ)。PL 判定により、これは改める(D-17 選択肢 B → G9)。
 
 ## 既存モデルで対応できる項目
 
@@ -42,7 +43,7 @@
 | `sensitivity` | dB | `inputSignal`(2.83 V または 1 W を明記)、`environment`、`method`(距離 1 m、軸上) | 2.83V/1m と 1W/1m を**単位ではなく条件**で区別し、換算は `toCanonicalUnit` ではなく相性診断側の `sensitivityAt1W` で行う |
 | `nominalImpedance` | Ω | なし(公称値はメーカー申告) | 評価には使わない。表示とトレースの文脈用 |
 | `minimumImpedance` | Ω | `frequencyHz`(最小となる周波数)、`method` | 第三者測定とメーカー申告が併存し得る |
-| `frequencyRange` | Hz(範囲) | `bandwidthHz` 形式ではなく値が範囲 → **`Measurement.value` が単一数値のため表現不可**。`rangeLow/rangeHigh` を持つ別型か、`low`/`high` 2 測定に分割する | 要判断(OPEN_DECISIONS D-07) |
+| `frequencyRange` | Hz(範囲) | `Measurement.value` が単一数値のため表現不可 → **範囲型**(`{ lowHz, highHz, toleranceDb, conditions }` を一体で保持)を追加。2 測定への分割は不採用 | PL 承認(D-07) |
 | `crossoverFrequency` | Hz | なし | 参考情報 |
 
 既存 4 指標の `METRIC_BOUNDS`(採点用正規化範囲)はアンプ専用である。スピーカー指標は**採点に接続しない**(採点方式の変更は PL 承認が必要)。
@@ -84,22 +85,35 @@ interface Source {
 
 | キー | 例 | 判定上の扱い(提案、D-03/D-13) |
 | --- | --- | --- |
-| `instrument?: string` | "Audio Precision APx555"、"Klippel NFS" | 相違は**注意**(機器差) |
+| `instrument?: string` | "Audio Precision APx555"、"Klippel NFS" | 相違は**保留**(P3 未承認: 同等性が確認されるまで保留を維持) |
 | `testSignal?: string` | "1 kHz sine, continuous"、"burst" | 相違は**保留**(手順差) |
-| `averaging?: string` | "1 kHz spot"、"300 Hz–3 kHz mean"、"IEC"、"Listening Window" | 感度では**保留**(手順差) |
+| `averaging?: string` | "spot"、"mean"、"IEC"、"Listening Window" | 感度では**保留**(手順差、P8 承認) |
+| `averagingBandHz?: [number, number]` | [300, 3000]、[1000, 1000](点値) | 感度では**保留**。未記録も保留(P8、PL 追加指示) |
 | `supplyVoltage?: string` | "100 V AC" | 注意 |
 | `distortionCriterion?: string` | "THD+N 1 %"、"THD+N 0.1 %" | 定格出力では**保留**(G6) |
 
-### G5 — 値を持たない測定参照
+### G5 — 値を持たない測定参照(PL: 案 B を優先検討)
 
-第三者測定の「所在・条件・リンクのみ」(D-16)と、許諾未確認で伏せる値(P7)を表すため、次のいずれかを提案する。
+第三者測定の「所在・条件・リンクのみ」(D-16)と、許諾未確認で公開しない値(P7)を表す。PL 判定により**案 B(別型 `MeasurementReference`)を優先**する: 欠測(`missing`)とは別に表現し、投影・採点には入らない。
 
-| 案 | 内容 | 利点 | 欠点 |
-| --- | --- | --- | --- |
-| A | 新 status `withheld`(値は `null`、出典・条件必須、投影では常に不採用、UI は「出典で確認」とリンク表示) | 既存 `Measurement` で完結 | `value: null` の意味が missing と二重化 |
-| B | 別型 `MeasurementReference { productId, metric, sourceId, conditions, note }` | missing との混同がない | 投影・UI の分岐が増える |
+| 案 | 内容 | 判定 |
+| --- | --- | --- |
+| A | 新 status `withheld`(値は `null`、出典・条件必須) | 不採用候補(`value: null` の意味が missing と二重化) |
+| B | 別型 `MeasurementReference { id, productId, metric, sourceId, conditions, quantities: string[], note, accessedAt }`。値を持たない。UI は「出典で確認」とリンク表示 | **優先検討** |
 
-いずれも検証規則「出典・条件必須」「投影・採点に不採用」を伴う。
+内部保存と公開を区別するため、許諾未確認だが内部に値を保持する場合は `Measurement` + `Source.reuse.quoteFacts: 'unknown'` とし、公開ビルドでは `MeasurementReference` 相当に落として表示する(数値・図表・本文・生データの区別は `Source.reuse` の 4 項目で表す)。検証規則: 出典・条件必須、投影・採点に不採用。
+
+### G9 — 採点適格性(D-17 選択肢 B、設計のみ)
+
+| 要素 | 内容 |
+| --- | --- |
+| 状態 | `missing`(値なし)/ `ineligible`(値あり・採点対象外)/ `eligible`(採点入力) |
+| 不適格の条件 | `REQUIRED_CONDITIONS[metric]` に未記録あり、または `status === 'estimated'`、または `MeasurementReference` |
+| 投影 | `MetricProjection` に `eligibility` を追加。`toMetricValues` は eligible のみ値を渡し、ineligible は `null` |
+| カバレッジ | 分母を「採点適格な指標の重み」に変更。`UtilityResult` に `ineligibleMetrics` を追加し JSON `computed` に出力 |
+| 選択順位 | 適格性を先に判定し、適格な候補の中で observed > manufacturer > 版 > 日付(P1 条件付き承認) |
+| 表示 | 不適格値は「採点対象外(条件未記録)」と明示し、欠測の「未測定」と区別 |
+| 方法論 | `METHODOLOGY_VERSION` 0.6.0。デモデータの扱いは D-18 |
 
 ### G6 — 定格出力の歪み基準
 
