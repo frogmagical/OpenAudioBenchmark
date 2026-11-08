@@ -9,7 +9,7 @@
 | G1 | `MetricId` が 4 指標(price / power / thdn / snr)に固定で、スピーカー指標(感度、公称/最小インピーダンス、周波数範囲、クロスオーバー)を `Measurement` として保持できない | LS50 Meta の公称値を記録できない | **拡張必須** |
 | G2 | `Product.category: 'speaker'` の製品に対し、相性診断が使う `DemoSpeaker.sensitivity {valueDb, reference}` と `Measurement` の間に橋渡しがない | 感度基準(2.83V/1m と 1W/1m)の追跡ができない | **拡張必須** |
 | G3 | `Source` に「一次資料/二次資料」「転載・保存・再配布の可否」「ライセンス確認状況」を区別する項目がない(`license: string | null` のみ) | 利用許諾の管理が自由文に依存 | **拡張必須** |
-| G4 | `MeasurementConditions` に測定機器・試験信号・平均方法(感度)を構造化する項目がなく、`method` 自由文に混在 | 手順差(保留)と機器差(注意)を区別できない。感度の平均方法を判定キーにできない | **拡張必須**(D-03/D-13 の前提) |
+| G4 | `MeasurementConditions` に測定機器・試験信号・平均方法・平均帯域(感度)を構造化する項目がなく、`method` 自由文に混在 | 機器・手順・試験信号を判定キーにできない(いずれも同等性確認まで保留、D-03)。感度の平均方法・帯域を判定キーにできない(D-13) | **拡張必須**(D-03/D-13 の前提) |
 | G5 | 「値を持たないが出典・条件・リンクを持つ測定」(第三者測定の所在のみ記録、許諾未確認で伏せる値)の置き場がない。`missing` に出典を付けるとエラー(`measurement.source-forbidden`)、参照されない出典は警告 | SOURCE_INVENTORY の「所在・条件・リンクのみ」運用(D-16)と P7 の「伏せる」を表現できない | **拡張必須** |
 | G6 | 定格出力の**歪み基準**(1 % / 0.1 % THD+N など)を保持する条件キーがない。`outputLevel` は「図を取った出力レベル」の意味で、転用は誤用 | 歪み基準が異なる W を別測定として弾けない | **拡張必須** |
 | G7 | `Product` に地域・市場、寸法・質量の項目がない。`FeatureKey` が `hdmi/usb/bt/hp/phono` のアンプ専用列挙で、光・同軸・サブウーファー出力やスピーカーの属性を表せない | 「型番・地域仕様・リビジョン」の同定結果と、LS50 Meta の文書間差(質量・奥行)を記録できない | 拡張推奨(同定記録は `notes` で暫定可) |
@@ -101,16 +101,16 @@ interface Source {
 | A | 新 status `withheld`(値は `null`、出典・条件必須) | 不採用候補(`value: null` の意味が missing と二重化) |
 | B | 別型 `MeasurementReference { id, productId, metric, sourceId, conditions, quantities: string[], note, accessedAt }`。値を持たない。UI は「出典で確認」とリンク表示 | **優先検討** |
 
-内部保存と公開を区別するため、許諾未確認だが内部に値を保持する場合は `Measurement` + `Source.reuse.quoteFacts: 'unknown'` とし、公開ビルドでは `MeasurementReference` 相当に落として表示する(数値・図表・本文・生データの区別は `Source.reuse` の 4 項目で表す)。検証規則: 出典・条件必須、投影・採点に不採用。
+内部保存と公開を区別する: **メーカー公称値**(D-15 判断待ち)は `Measurement` + `Source.reuse.quoteFacts: 'unknown'` として内部保持し、公開ビルドでは `MeasurementReference` 相当に落として表示する(数値・図表・本文・生データの区別は `Source.reuse` の 4 項目で表す)。**第三者測定**はパイロットでは `MeasurementReference` のみ(D-16、数値は内部にも保持しない)。検証規則: 出典・条件必須、投影・採点に不採用。
 
 ### G9 — 採点適格性(D-17 選択肢 B、設計のみ)
 
 | 要素 | 内容 |
 | --- | --- |
 | 状態 | `missing`(値なし)/ `ineligible`(値あり・採点対象外)/ `eligible`(採点入力) |
-| 不適格の条件 | `REQUIRED_CONDITIONS[metric]` に未記録あり、または `status === 'estimated'`、または `MeasurementReference` |
+| 不適格の条件 | `REQUIRED_CONDITIONS[metric]` に未記録あり、または図表読取由来の `estimated`(P6)、または `MeasurementReference`。`estimated` 全般の不適格化は Claude 側の統合案で要 PL 確認 |
 | 投影 | `MetricProjection` に `eligibility` を追加。`toMetricValues` は eligible のみ値を渡し、ineligible は `null` |
-| カバレッジ | 分母を「採点適格な指標の重み」に変更。`UtilityResult` に `ineligibleMetrics` を追加し JSON `computed` に出力 |
+| カバレッジ | 分母を「採点適格な指標の重み」に変更(解釈は PL 確認事項、ADR-0007)。`calculateUtility` の入力を 3 状態(`eligible` / `ineligible` / `missing`)にするシグネチャ変更が必要。`UtilityResult` に `ineligibleMetrics` を追加し JSON `computed` に出力 |
 | 選択順位 | 適格性を先に判定し、適格な候補の中で observed > manufacturer > 版 > 日付(P1 条件付き承認) |
 | 表示 | 不適格値は「採点対象外(条件未記録)」と明示し、欠測の「未測定」と区別 |
 | 方法論 | `METHODOLOGY_VERSION` 0.6.0。デモデータの扱いは D-18 |
@@ -125,7 +125,7 @@ interface Source {
 
 ### G8 — スキーマ版
 
-`Source.reuse`(G3)・条件キー(G4)・新 status(G5)はいずれも `DATASET_SCHEMA_VERSION` を '1.1' に上げる変更である。ゲートは版不一致をエラーにするため、既存の架空データセットも同時に更新する。
+`Source.reuse`(G3)・条件キー(G4)・値なし参照型 `MeasurementReference`(G5)・採点適格性(G9)はいずれも `DATASET_SCHEMA_VERSION` を '1.1' に上げる変更である。ゲートは版不一致をエラーにするため、既存の架空データセットも同時に更新する。
 
 ## 検証規則で追加が必要なもの
 

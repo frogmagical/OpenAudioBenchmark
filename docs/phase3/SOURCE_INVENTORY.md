@@ -35,7 +35,7 @@
 
 | 出典 | 証拠種別 | 対象型番・版 | 測定条件の記載 | 数値引用 | 図表転載 | 生データ保存 | 再配布 | 根拠(引用) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| SRC-SMSL-MANUAL-PRO | manufacturer | AO300 PRO、Manual Ver 1.0 | **なし**(出力の歪み基準・SNR 重み付け・帯域が未記載) | 事実引用は可能と判断(仕様値は事実)— 要 PL 確認 | 不可(All Rights Reserved) | 不可 | 不可 | 公式サイト "All Rights Reserved"; マニュアル "subject to change without notice" |
+| SRC-SMSL-MANUAL-PRO | manufacturer | AO300 PRO、Manual Ver 1.0 | **なし**(出力の歪み基準・SNR 重み付け・帯域が未記載) | 事実引用の可否は **PM/法務判断待ち(D-15)**。許諾不明を法的禁止とは断定しない | 不可(All Rights Reserved) | 不可 | 不可 | 公式サイト "All Rights Reserved"; マニュアル "subject to change without notice" |
 | SRC-SMSL-PAGE | manufacturer | AO300 PRO | — | 同上 | 不可 | 不可 | 不可 | 同上 |
 | SRC-AUDIOPHONICS-PRO | retailer(公称値の転載) | AO300 PRO | なし | **使用しない**(複製禁止条項。付録の引用は調査ログであり、データ出典にはしない) | 不可 | 不可 | 不可 | 第12条 "Any total or partial reproduction of this content is strictly prohibited" |
 | SRC-AOSHIDA | retailer(価格) | AO300 PRO | — | 価格の事実のみ、要確認 | 不可 | 不可 | 不可 | "You may not use, reproduce, copy, modify, transmit, display, publish, sell" |
@@ -75,7 +75,7 @@
 
 | 出典 | 証拠種別 | 対象・版 | 測定条件の記載 | 数値引用 | 図表転載 | 生データ保存 | 再配布 | 根拠(引用) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| KEF 公式文書(Info sheet / 白書 / PR / JSON) | manufacturer | LS50 Meta(リビジョン表記なし) | 感度は 2.83 V/1 m、歪みは 90 dB/1 m。環境・平均法は未記載 | 事実引用は可能と判断 — 要 PL 確認 | 不可 | 不可 | 不可 | KEF 規約: 書面同意なしの複製・再利用を禁止 https://international.kef.com/pages/terms-and-conditions |
+| KEF 公式文書(Info sheet / 白書 / PR / JSON) | manufacturer | LS50 Meta(リビジョン表記なし) | 感度は 2.83 V/1 m、歪みは 90 dB/1 m。環境・平均法は未記載 | 事実引用の可否は **PM/法務判断待ち(D-15)** | 不可 | 不可 | 不可 | KEF 規約: 書面同意なしの複製・再利用を禁止 https://international.kef.com/pages/terms-and-conditions |
 | SRC-NRC-2020 | observed | 試料リビジョン記載なし | 無響室、2 m→1 m 換算、2.83 V、300 Hz–3 kHz 平均 | **使用しない**(転載禁止) | 不可 | 不可 | 不可 | "Reproduction in any format is not permitted." |
 | SRC-EAC-2023 | observed | 試料リビジョン記載なし | Klippel NFS、エージング済み、駆動電圧はページ未記載 | 個別許諾が必要 | 不可 | 不可 | 不可 | データ利用ポリシー "No general license is granted..." https://www.erinsaudiocorner.com/measurement-data-policy/ |
 | SRC-HFN-2021 | observed(出版社の Lab Report。`Source.kind` は editorial となり、DATA_MODEL の independent-lab 区分と一致しない点に注意) | 記載なし | 1 kHz / Mean / IEC、2.83 V/1 m | 不可(出版社著作物、転載 PDF) | 不可 | 不可 | 不可 | 許諾文なし(KEF assets 上の配布は KEF と HFN 間の取り決めで、第三者に及ばない) |

@@ -76,11 +76,11 @@
 | 測定ページ | HTTP 403(www有無、node/261085 も同様) | 未確認 | https://www.stereophile.com/content/kef-ls50-meta-loudspeaker-measurements | 2026-11-08 | - |
 | レビュー本文・仕様ページ | HTTP 403 | 未確認 | https://www.stereophile.com/content/kef-ls50-meta-loudspeaker / .../kef-ls50-meta-loudspeaker-specifications | 2026-11-08 | - |
 | 掲載号 | Magzter 一覧で 2021年1月号とされる(本文未取得) | 未確認 | https://magzter.com/de/stories/Technology/Stereophile/KEF-LS50-Meta-LOUDSPEAKER | 2026-11-08 | (取得は分類器により拒否) |
-| 感度(スニペット) | 84.5dB(B)/2.83V/m と検索スニペットに表示。本文で未裏取り | 未確認(検索スニペットのみ) | 同測定ページ | 2026-11-08 | "My estimate of the LS50 Meta's voltage sensitivity was 84.5dB(B)/2.83V/m" |
+| 感度(スニペット) | 検索スニペットに感度推定値の記載が見えるが、本文で未裏取り(数値は転記しない) | 未確認(検索スニペットのみ) | 同測定ページ | 2026-11-08 | (数値引用は方針により省略) |
 | 図1(スニペット) | インピーダンス振幅・位相図の存在 | 未確認(検索スニペットのみ) | 同測定ページ | 2026-11-08 | "electrical impedance (solid) and phase (dashed) (2 ohms/vertical div.)" |
-| EPDR(検索要約) | 最小 EPDR 約1.66Ω@135-140Hz、1.7Ω@660-725Hz と検索要約が記載。本文未確認 | 未確認 | 同測定ページ | 2026-11-08 | - |
+| EPDR(検索要約) | 検索要約に最小 EPDR の記載が見えるが本文未確認(数値は転記しない) | 未確認 | 同測定ページ | 2026-11-08 | - |
 | 方法・機材・試料リビジョン | 不明 | 未確認 | 同測定ページ | 2026-11-08 | - |
-| 注意 | 検索要約が「2026年版 Recommended Components で公称4Ω、EPDR 0.95Ω@84Hz」と述べたが、他モデルとの混同の疑い。採用しない | 未確認(疑義) | https://www.stereophile.com/content/recommended-components-2026-edition-loudspeakers | 2026-11-08 | - |
+| 注意 | 検索要約が 2026 年版 Recommended Components の記述として公称インピーダンス・EPDR 値を挙げたが、他モデルとの混同の疑い。採用しない(数値は転記しない) | 未確認(疑義) | https://www.stereophile.com/content/recommended-components-2026-edition-loudspeakers | 2026-11-08 | - |
 
 ### 3-2. Audio Science Review(amirm)
 
@@ -100,7 +100,7 @@
 | 測定系 | Klippel NFS | 確認済み | レビューURL | 2026-11-08 | "All data collected using Klippel's Near-Field Scanner." |
 | 測定項目 | CTA-2034 スピン、PIR、水平/垂直コンター、インピーダンス、ステップ・群遅延、歪(86/96dB@1m)、圧縮、マルチトーン | 確認済み | レビューURL | 2026-11-08 | 歪: "86 dB and 96 dB @ 1m" |
 | 感度(実測) | 軸上平均感度の記載あり(数値は転記しない)。駆動電圧・距離はページに明記なし | 確認済み(条件は未記載) | レビューURL | 2026-11-08 | (数値引用は方針により省略) |
-| 同(第三者再掲) | spinorama.org は 2.83V/1m、300Hz-3kHz 平均 83.0dB と記載 | 推定(第三者の記載) | https://www.spinorama.org/speakers/KEF%20LS50%20Meta/ErinsAudioCorner/index_eac-v1-0-degree.html | 2026-11-08 | "Origin of the data is ErinsAudioCorner." |
+| 同(第三者再掲) | spinorama.org は 2.83V/1m、300Hz-3kHz 平均の感度値を再掲(数値は転記しない) | 推定(第三者の記載) | https://www.spinorama.org/speakers/KEF%20LS50%20Meta/ErinsAudioCorner/index_eac-v1-0-degree.html | 2026-11-08 | "Origin of the data is ErinsAudioCorner." |
 | 最小インピーダンス | 最小インピーダンスとその周波数帯の記載あり(数値は転記しない) | 確認済み | レビューURL | 2026-11-08 | (数値引用は方針により省略) |
 | 条件 | 基準点ツイーター、0°主体・15°追加、エージング済み | 確認済み | レビューURL | 2026-11-08 | "Speaker was broken in." |
 | 試料リビジョン | 記載なし | 確認済み(不存在) | レビューURL | 2026-11-08 | - |
@@ -128,7 +128,7 @@
 | インピーダンス | 最小・最大インピーダンスとその周波数の記載あり(数値は転記しない)。表と本文で最小値の周波数表記が不一致 | 確認済み(表内不一致あり) | 同上 | 2026-11-08 | (数値引用は方針により省略) |
 | 位相 | 位相の最小・最大とその周波数の記載あり(数値は転記しない) | 確認済み | 同上 | 2026-11-08 | "Impedance phase: minimum & maximum (20Hz–20kHz)" |
 | 応答誤差 | ペア差・応答誤差の記載あり(数値は転記しない) | 確認済み | 同上 | 2026-11-08 | (数値引用は方針により省略) |
-| THD | 90dB SPL/1m で 1.2%/0.2%/0.7%(100Hz/1kHz/10kHz) | 確認済み | 同上 | 2026-11-08 | "THD 100Hz/1kHz/10kHz (for 90dB SPL/1m) 1.2% / 0.2% / 0.7%" |
+| THD | THD の記載あり(3 条件、数値は転記しない) | 確認済み | 同上 | 2026-11-08 | (数値引用は方針により省略) |
 | 試料リビジョン | 記載なし(「新品試料」のみ) | 確認済み(不存在) | 同上 | 2026-11-08 | - |
 
 ## 4. ライセンス・利用規約
@@ -170,7 +170,7 @@
 | --- | --- | --- |
 | KEF 公式製品ページの仕様欄・価格表示(税込表記、ペア単位) | 全地域 /products/ls50-meta が 429 | 時間を置いて再取得。代替として取得済みの KEF Info sheet(08.2025)を一次仕様とし、出所が販売店ホスティングである旨を注記 |
 | 2020年白書(7.2kg/278mm)と2025年 Info sheet(7.8kg/280.5mm)の差 | 文書間の不一致。リビジョン表記なし | KEF への照会、または 2020-2021 年の公式製品ページのアーカイブ確認。推測で統一しない |
-| Stereophile 測定(方法・機材・感度・インピーダンス・EPDR・掲載号・試料) | HTTP 403 | ユーザー側ブラウザで取得し引用を追加。検索スニペット値(84.5dB(B)/2.83V/m 等)は本文確認まで採用しない |
+| Stereophile 測定(方法・機材・感度・インピーダンス・EPDR・掲載号・試料) | HTTP 403 | ユーザー側ブラウザで取得し所在・条件を追加。検索スニペットの数値は本文確認まで採用せず、転記もしない |
 | Stereophile 利用規約 | HTTP 403 | 同上 |
 | ASR レビュー(投稿者・日付・条件・感度基準・最小インピーダンス) | HTTP 403 | 同上。スレッドIDは 25574 を使用 |
 | ASR 利用規約 | HTTP 403 | 同上 |
