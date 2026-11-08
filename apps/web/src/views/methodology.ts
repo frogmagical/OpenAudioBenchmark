@@ -28,7 +28,8 @@ export function renderMethodologyMeta(): void {
   block.dataset['methodologyVersion'] = METHODOLOGY_VERSION;
   block.innerHTML =
     `<strong>計算方式のバージョンと既知の制約</strong><br/>` +
-    `現在の計算方式：<code>${METHODOLOGY_VERSION}</code>（承認済みプロトタイプ v0.4 の式・基準範囲・閾値をそのまま移植）。` +
+    `現在の計算方式：<code>${METHODOLOGY_VERSION}</code>。承認済みプロトタイプ v0.4 の式・基準範囲・閾値を基礎とし、` +
+    `0.5.0-demo で「価格0円は価格スコアの対象外（欠測扱い）」「カバー率${Math.round(COVERAGE_THRESHOLD * 100)}%未満の製品は公開JSONの参考適合度を非公開（null）」を追加。` +
     `計算結果にはこのバージョンを付与し、式・範囲・閾値の変更時に更新します。` +
     `<ul>${KNOWN_LIMITS.map((t) => `<li>${t}</li>`).join('')}</ul>`;
   section.append(block);

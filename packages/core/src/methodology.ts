@@ -4,12 +4,16 @@ import type { MetricKey, NormalizationBounds } from './types.ts';
  * Methodology version attached to every computed result so that outputs stay
  * traceable to the formula set that produced them.
  *
- * `0.4.0-demo` = the formulas, bounds and thresholds of the approved v0.4
- * prototype (`prototype/index.html`), ported without behavioural change.
+ * History (details in docs/METHODOLOGY.md):
+ * - `0.4.0-demo`: formulas, bounds and thresholds of the approved v0.4
+ *   prototype (`prototype/index.html`), ported without behavioural change.
+ * - `0.5.0-demo` (2026-11-08, product-owner decision, ADR-0003): a reference
+ *   price of 0 is invalid data and excluded from the price score; products
+ *   below the coverage gate publish `score: null` in exports.
  * Bump this (and document the change in docs/METHODOLOGY.md) whenever a
  * formula, bound or threshold changes.
  */
-export const METHODOLOGY_VERSION = '0.4.0-demo' as const;
+export const METHODOLOGY_VERSION = '0.5.0-demo' as const;
 
 /**
  * Prototype UX assumption: a utility score is only shown when at least this
@@ -33,8 +37,8 @@ export const PEAK_SPL_RANGE_DB = { min: 60, max: 115 } as const;
  * temporary illustrative bounds, not a standard.
  */
 export const METRIC_BOUNDS: Readonly<Record<MetricKey, NormalizationBounds>> = {
-  price: { min: 20000, max: 100000, invert: true, scale: 'linear', unit: 'JPY' },
-  power: { min: 20, max: 160, invert: false, scale: 'linear', unit: 'W' },
-  thdn: { min: -4, max: -1, invert: true, scale: 'log10', unit: '%' },
-  snr: { min: 70, max: 120, invert: false, scale: 'linear', unit: 'dB' },
+  price: { min: 20000, max: 100000, invert: true, scale: 'linear', requirePositive: true, unit: 'JPY' },
+  power: { min: 20, max: 160, invert: false, scale: 'linear', requirePositive: false, unit: 'W' },
+  thdn: { min: -4, max: -1, invert: true, scale: 'log10', requirePositive: true, unit: '%' },
+  snr: { min: 70, max: 120, invert: false, scale: 'linear', requirePositive: false, unit: 'dB' },
 };

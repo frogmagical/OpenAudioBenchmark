@@ -69,6 +69,11 @@ export interface NormalizationBounds {
   readonly invert: boolean;
   /** `log10` applies Math.log10 to the value before clamping (used for THD+N). */
   readonly scale: 'linear' | 'log10';
+  /**
+   * When true, a value of 0 is invalid data (treated as missing), not a measurement.
+   * Methodology 0.5.0-demo: a reference price of 0 JPY is excluded from the price score.
+   */
+  readonly requirePositive: boolean;
   readonly unit: string;
 }
 

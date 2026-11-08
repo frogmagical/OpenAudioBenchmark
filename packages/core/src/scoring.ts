@@ -17,6 +17,7 @@ import type { DemoProduct, MetricKey, NormalizationBounds, UtilityResult, Weight
  *
  * - `null`, non-finite or negative values → `null` (treated as missing; never 0/100 by default).
  * - `scale: 'log10'` applies `Math.log10` first; a value ≤ 0 is invalid for a log scale → `null`.
+ * - `requirePositive: true` also maps 0 to `null` (methodology 0.5.0-demo: price 0 is not a price).
  * - The position inside the range is clamped to [0, 1], so out-of-range values
  *   saturate at 0 or 100 instead of producing values beyond the scale.
  * - `invert: true` makes the lower bound score 100 (lower is better).
@@ -25,7 +26,7 @@ import type { DemoProduct, MetricKey, NormalizationBounds, UtilityResult, Weight
 export function normalize(value: number | null, bounds: NormalizationBounds): number | null {
   if (value === null || !Number.isFinite(value) || value < 0) return null;
   if (!Number.isFinite(bounds.min) || !Number.isFinite(bounds.max) || bounds.max <= bounds.min) return null;
-  if (bounds.scale === 'log10' && value <= 0) return null;
+  if ((bounds.scale === 'log10' || bounds.requirePositive) && value <= 0) return null;
   const scaled = bounds.scale === 'log10' ? Math.log10(value) : value;
   const position = Math.max(0, Math.min(1, (scaled - bounds.min) / (bounds.max - bounds.min)));
   const score = 100 * (bounds.invert ? 1 - position : position);

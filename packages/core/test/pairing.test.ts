@@ -113,7 +113,7 @@ describe('pairing validation and evaluation', () => {
     expect(result).toMatchObject({
       sensitivityAt1WDb: 85, availablePowerW: 85, outputVerdict: 'positive',
       loadVerdict: 'pending', bandVerdict: 'pending', ampId: 'a', speakerId: 's1',
-      inputs: DEFAULT_PAIRING_INPUT, methodologyVersion: '0.4.0-demo',
+      inputs: DEFAULT_PAIRING_INPUT, methodologyVersion: '0.5.0-demo',
     });
     input.distanceM = 2;
     expect(result.inputs.distanceM).toBe(1.5);
@@ -124,7 +124,7 @@ describe('pairing validation and evaluation', () => {
     const demanding = DEMO_SPEAKERS.find(s => s.id === 's3')!;
     expect(evaluatePairing(compact, demanding, DEFAULT_PAIRING_INPUT)).toMatchObject({
       ok: true, availablePowerW: null, headroomDb: null, outputVerdict: 'pending',
-      loadVerdict: 'pending', bandVerdict: 'pending', methodologyVersion: '0.4.0-demo',
+      loadVerdict: 'pending', bandVerdict: 'pending', methodologyVersion: '0.5.0-demo',
     });
   });
 
@@ -148,7 +148,7 @@ describe('pairing validation and evaluation', () => {
     for (const a of DEMO_AMPS) {
       for (const s of DEMO_SPEAKERS) {
         expect(evaluatePairing(a, s, DEFAULT_PAIRING_INPUT)).toMatchObject({
-          ok: true, loadVerdict: 'pending', bandVerdict: 'pending', methodologyVersion: '0.4.0-demo',
+          ok: true, loadVerdict: 'pending', bandVerdict: 'pending', methodologyVersion: '0.5.0-demo',
         });
       }
     }
