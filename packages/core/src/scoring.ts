@@ -8,8 +8,7 @@
  * `coverage`; they are never scored as 0 or 100. The result is a
  * user-weighted decision aid, not an objective audio-quality metric.
  */
-import { METRIC_BOUNDS } from './fixtures.ts';
-import { COVERAGE_THRESHOLD, METHODOLOGY_VERSION } from './methodology.ts';
+import { COVERAGE_THRESHOLD, METHODOLOGY_VERSION, METRIC_BOUNDS } from './methodology.ts';
 import { METRIC_KEYS } from './types.ts';
 import type { DemoProduct, MetricKey, NormalizationBounds, UtilityResult, Weights } from './types.ts';
 

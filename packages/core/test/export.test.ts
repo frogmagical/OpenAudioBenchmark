@@ -49,7 +49,7 @@ describe('JSON export', () => {
     const parsed = JSON.parse(text);
     expect(text).toBe(JSON.stringify(parsed, null, 2));
     expect(parsed).toEqual({
-      notice: 'FICTIONAL DEMO DATA ONLY', version: '0.1.0', methodologyVersion: '0.4.0-demo',
+      notice: 'FICTIONAL DEMO DATA ONLY', version: '0.2.0', methodologyVersion: '0.4.0-demo',
       date: '2026-11-08', weights,
       products: [{ ...product, computed: {
         score: expect.closeTo(55.4924428138, 8), coverage: 1, usedWeight: 100, totalWeight: 100,
@@ -73,5 +73,19 @@ describe('JSON export', () => {
     const parsed = JSON.parse(buildCatalogJson([product], zero, { date: '2026-11-08' }));
     expect(parsed.products[0].computed).toMatchObject({ score: null, coverage: 0, status: 'pending' });
     expect(JSON.parse(buildCatalogJson([], weights, { date: '2026-11-08' })).products).toEqual([]);
+  });
+});
+
+describe('CSV formula-injection guard', () => {
+  it.each(['=HYPERLINK("http://x")', '+1+1', '-2+3', '@SUM(A1)', '\tcmd', '\rcmd'])('neutralises string cell %j', cell => {
+    expect(toCsv([[cell]])).toBe('"\'' + cell.replace(/"/g, '""') + '"');
+  });
+
+  it('leaves numeric cells, including negative numbers, untouched', () => {
+    expect(toCsv([[-1.5, 0, 42]])).toBe('"-1.5","0","42"');
+  });
+
+  it('leaves ordinary text untouched', () => {
+    expect(toCsv([['Compact Amp E', 'usb|bt', 'あり']])).toBe('"Compact Amp E","usb|bt","あり"');
   });
 });

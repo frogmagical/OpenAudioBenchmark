@@ -176,7 +176,16 @@ export interface PairingFailure {
 export type PairingResult = PairingSuccess | PairingFailure;
 
 export interface ConditionComparison {
+  /**
+   * `compatible`: every recorded condition is recorded and equal on both sides, and at least one is recorded.
+   * `incompatible`: at least one condition differs or is recorded on one side only.
+   * `undetermined`: nothing is recorded on either side — unknown conditions are never assumed identical.
+   */
+  readonly status: 'compatible' | 'incompatible' | 'undetermined';
+  /** `status === 'compatible'`. Kept for ergonomic checks; never true for undetermined. */
   readonly compatible: boolean;
-  /** Keys that differ or are unrecorded on one side. Empty when compatible. */
+  /** Keys that differ or are unrecorded on one side, sorted alphabetically. Empty unless incompatible. */
   readonly mismatches: readonly (keyof MeasurementConditions)[];
+  /** Keys recorded (and equal) on both sides, sorted alphabetically. */
+  readonly shared: readonly (keyof MeasurementConditions)[];
 }

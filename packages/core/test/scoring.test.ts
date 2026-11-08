@@ -60,7 +60,7 @@ describe('weighted utility and coverage', () => {
 
   it.each<[Weights, number, string]>([
     [{ price: 30, power: 40, thdn: 30, snr: 0 }, 0.7, 'scored'],
-    // Binary-exact weights total 125: 87.375 / 125 = 69.9%, within slider bounds.
+    // Binary-exact weights total 125: 87.375 / 125 = 69.9%, within the 0–100 weight range (not reachable with the UI step of 5).
     [{ price: 37.5, power: 49.875, thdn: 37.625, snr: 0 }, 0.699, 'pending'],
   ])('keeps the 70 percent boundary inclusive (%j)', (weights, coverage, status) => {
     const result = calculateUtility({ ...product, thdn: null }, weights);

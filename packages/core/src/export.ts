@@ -8,6 +8,9 @@ import { calculateUtility } from './scoring.ts';
 import type { DemoProduct, Weights } from './types.ts';
 
 /** Column headers of the catalog CSV, in order. */
+/** Export-format version. 0.1.0 was the prototype's `{coverage, score}` shape; 0.2.0 adds status, metric scores, provenance and methodologyVersion. */
+export const CATALOG_JSON_VERSION = '0.2.0' as const;
+
 export const CATALOG_CSV_HEADER: readonly string[] = [
   '製品',
   '価格(円)',
@@ -26,7 +29,20 @@ export const CATALOG_CSV_HEADER: readonly string[] = [
  * cells become empty strings. Non-string cells are stringified with `String()`.
  */
 export function toCsv(rows: readonly (readonly (string | number | null | undefined)[])[]): string {
-  return rows.map(row => row.map(cell => '"' + String(cell ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  return rows.map(row => row.map(cell => '"' + csvText(cell).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+}
+
+/** Leading characters that spreadsheets interpret as a formula even inside a quoted cell. */
+const FORMULA_PREFIX = /^[=+\-@\t\r]/;
+
+/**
+ * Text of one cell. String cells that start with a formula trigger are prefixed with
+ * a single quote so spreadsheet software shows them literally; numbers are untouched.
+ */
+function csvText(cell: string | number | null | undefined): string {
+  if (cell === null || cell === undefined) return '';
+  if (typeof cell === 'number') return String(cell);
+  return FORMULA_PREFIX.test(cell) ? `'${cell}` : cell;
 }
 
 /**
@@ -50,9 +66,9 @@ export function buildCatalogCsv(products: readonly DemoProduct[], weights: Weigh
 
 /**
  * Pretty-printed (2-space) JSON:
- * `{ notice: FICTIONAL_DATA_NOTICE, version: '0.1.0', methodologyVersion, date, weights,
+ * `{ notice: FICTIONAL_DATA_NOTICE, version: CATALOG_JSON_VERSION, methodologyVersion, date, weights,
  *    products: products.map(p => ({ ...p, computed: calculateUtility(p, weights) })) }`.
- * `version` is the export-format version kept from the prototype.
+ * `version` is the export-format version (see CATALOG_JSON_VERSION).
  */
 export function buildCatalogJson(
   products: readonly DemoProduct[],
@@ -61,7 +77,7 @@ export function buildCatalogJson(
 ): string {
   return JSON.stringify({
     notice: FICTIONAL_DATA_NOTICE,
-    version: '0.1.0',
+    version: CATALOG_JSON_VERSION,
     methodologyVersion: METHODOLOGY_VERSION,
     date: options.date,
     weights,

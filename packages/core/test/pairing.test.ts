@@ -66,6 +66,8 @@ describe('power and headroom', () => {
   it.each<[number | null, PairingVerdict]>([
     [3, 'positive'], [2.999, 'neutral'], [0, 'neutral'], [-0.001, 'negative'], [null, 'pending'],
   ])('classifies %s dB as %s', (value, verdict) => {
+    // The 3 dB / 0 dB boundaries are pinned on literal inputs on purpose: through headroomDb,
+    // available = required·10^0.3 yields 2.999999999999999 dB (prototype arithmetic is identical). Do not add an epsilon.
     expect(classifyHeadroom(value)).toBe(verdict);
   });
 });
@@ -84,6 +86,12 @@ describe('pairing validation and evaluation', () => {
     expect(evaluatePairing(amp, speaker, input)).toEqual({ ok: false, error: 'invalid-input', problems: [code] });
   });
 
+  it.each([0, -8, NaN, Infinity])('rejects a speaker whose nominal load is %s instead of throwing', ohms => {
+    expect(evaluatePairing(amp, { ...speaker, nominalOhms: ohms }, DEFAULT_PAIRING_INPUT)).toEqual({
+      ok: false, error: 'invalid-input', problems: ['speaker-load-invalid'],
+    });
+  });
+
   it('reports all invalid fields together', () => {
     expect(validatePairingInput({ distanceM: 0, targetPeakSpl: NaN, stereoGainDb: Infinity, safetyMarginDb: NaN }))
       .toEqual(['distance-out-of-range', 'peak-invalid', 'stereo-gain-invalid', 'safety-margin-invalid']);
@@ -100,8 +108,8 @@ describe('pairing validation and evaluation', () => {
     const result = evaluatePairing(amp, speaker, input);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('Expected a valid reference pairing');
-    expect(result.requiredPowerW).toBeCloseTo(22.5, 1);
-    expect(result.headroomDb).toBeCloseTo(5.77, 1);
+    expect(result.requiredPowerW).toBeCloseTo(22.5, 10);
+    expect(result.headroomDb).toBeCloseTo(5.7724, 3);
     expect(result).toMatchObject({
       sensitivityAt1WDb: 85, availablePowerW: 85, outputVerdict: 'positive',
       loadVerdict: 'pending', bandVerdict: 'pending', ampId: 'a', speakerId: 's1',

@@ -52,10 +52,11 @@ export function initCatalog(products: readonly DemoProduct[] = DEMO_PRODUCTS): C
   const featureEls = qsa<HTMLInputElement>('.feature');
 
   const list = (): DemoProduct[] => {
-    const budget = Number(budgetEl.value);
+    // Parity with v0.4 (`+value || Infinity`): empty, 0 or non-numeric = no limit; a negative budget excludes everything.
+    const budget = Number(budgetEl.value) || null;
     const needed = featureEls.filter((e) => e.checked).map((e) => e.value as FeatureKey);
     const filtered = filterProducts(products, {
-      budgetMax: budget > 0 ? budget : null,
+      budgetMax: budget,
       requiredFeatures: needed,
       verifiedOnly: verifiedEl.checked,
     });
@@ -65,17 +66,23 @@ export function initCatalog(products: readonly DemoProduct[] = DEMO_PRODUCTS): C
   const selectedProducts = (): DemoProduct[] =>
     selected.map((id) => products.find((p) => p.id === id)).filter((p): p is DemoProduct => p !== undefined);
 
-  const renderSliders = (): void => {
+  const updateSliderOutputs = (): void => {
     const pct = weightPercentages(weights);
+    for (const k of METRIC_KEYS) qs(`#w_${k}_pct`).textContent = `${pct[k]}%`;
+  };
+
+  const renderSliders = (): void => {
     slidersEl.innerHTML = METRIC_KEYS.map(
       (k) =>
-        `<div class="weighttitle"><label for="w_${k}">${METRIC_LABELS[k]}</label><output>${pct[k]}%</output></div>` +
+        `<div class="weighttitle"><label for="w_${k}">${METRIC_LABELS[k]}</label><output id="w_${k}_pct" for="w_${k}"></output></div>` +
         `<input class="slider" type="range" min="0" max="100" step="5" id="w_${k}" value="${weights[k]}">`,
     ).join('');
+    updateSliderOutputs();
     for (const k of METRIC_KEYS) {
+      // Update the percentages in place so the slider being adjusted keeps keyboard focus.
       qs<HTMLInputElement>(`#w_${k}`).addEventListener('input', (e) => {
         weights = { ...weights, [k]: Number((e.target as HTMLInputElement).value) };
-        renderSliders();
+        updateSliderOutputs();
         render();
       });
     }

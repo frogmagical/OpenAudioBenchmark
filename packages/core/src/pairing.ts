@@ -22,7 +22,8 @@ import type { DemoAmp, DemoSpeaker, PairingInput, PairingResult, PairingVerdict,
 /**
  * Convert a sensitivity figure to dB @ 1 W / 1 m for the given nominal load.
  * - `1W/1m` → returned unchanged.
- * - `2.83V/1m` → 2.83 V delivers 8/Z watts into Z ohms, so
+ * - `2.83V/1m` → by convention 2.83 V ≙ 1 W into 8 Ω (2.83² = 8.0089 W, a 0.005 dB difference that is
+ *   ignored), i.e. 8/Z watts into Z ohms, so
  *   `S(1W) = S(2.83V) − 10·log10(8 / nominalOhms)`; identical only for 8 Ω
  *   (4 Ω: −3.01 dB, 16 Ω: +3.01 dB).
  * Throws `RangeError` when `nominalOhms` is not a finite positive number.
@@ -94,12 +95,14 @@ export function validatePairingInput(input: PairingInput): string[] {
 
 /**
  * Full pairing evaluation. Returns `{ ok: false, error: 'invalid-input', problems }`
- * when `validatePairingInput` reports anything; otherwise a `PairingSuccess`
+ * when `validatePairingInput` reports anything or the speaker's nominal load is
+ * not a finite positive number (`speaker-load-invalid`); otherwise a `PairingSuccess`
  * with `loadVerdict` and `bandVerdict` fixed to 'pending' and
  * `methodologyVersion = METHODOLOGY_VERSION`.
  */
 export function evaluatePairing(amp: DemoAmp, speaker: DemoSpeaker, input: PairingInput): PairingResult {
   const problems = validatePairingInput(input);
+  if (!Number.isFinite(speaker.nominalOhms) || speaker.nominalOhms <= 0) problems.push('speaker-load-invalid');
   if (problems.length > 0) return { ok: false, error: 'invalid-input', problems };
   const sensitivityAt1WDb = sensitivityAt1W(speaker.sensitivity, speaker.nominalOhms);
   const required = requiredPowerW(sensitivityAt1WDb, input);

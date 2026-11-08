@@ -162,6 +162,56 @@ describe('catalog', () => {
     expect(total).toBeLessThanOrEqual(101);
   });
 
+  it('ranks the balanced preset in the order implied by the formulas', () => {
+    // Hand-computed from the v0.4 normalisation with balanced weights (25/25/30/20), e.g.
+    // A: price 67.5, power 46.4, THD+N 43.4, S/N 70 → 55.5; C: 85, 39.3, 33.3, 56 → 52.3.
+    // F lacks S/N (80 % coverage) and E lacks THD+N (70 % coverage) but both stay above the 70 % gate.
+    expect(recordNames()).toEqual([
+      'Studio Amp B',
+      'Drive Amp D',
+      'Classic Amp F',
+      'Reference Amp A',
+      'Living Amp C',
+      'Compact Amp E',
+    ]);
+    const scores = records().map((r) => r.querySelector('.score b')!.textContent);
+    expect(scores).toEqual(['69.5', '66.0', '56.6', '55.5', '52.3', '51.6']);
+  });
+
+  it('shows 比較保留 instead of a score once coverage drops below 70 %', () => {
+    const scoreOf = (id: string) => records().find((r) => r.dataset['productId'] === id)!.querySelector('.score')!.textContent;
+    expect(scoreOf('e')).toContain('参考適合度 / 100');
+    // Move weight onto THD+N, which Compact Amp E lacks: E's coverage falls to 30/55 ≈ 55 %.
+    setValue('#w_thdn', '45');
+    setValue('#w_price', '0');
+    setValue('#w_power', '0');
+    setValue('#w_snr', '10');
+    expect(scoreOf('e')).toBe('—比較保留');
+    expect(scoreOf('a')).toContain('参考適合度 / 100');
+    expect(records().at(-1)!.dataset['productId']).toBe('e');
+  });
+
+  it('keeps keyboard focus on the slider being adjusted and updates its percentage in place', () => {
+    el('.menu-button[data-go="benchmark"]').click();
+    const slider = el<HTMLInputElement>('#w_price');
+    slider.focus();
+    expect(document.activeElement).toBe(slider);
+    setValue('#w_price', '45');
+    expect(document.activeElement).toBe(slider);
+    expect(el<HTMLInputElement>('#w_price').isConnected).toBe(true);
+    expect(el('#w_price_pct').textContent).toBe(`${Math.round((45 / 120) * 100)}%`);
+    expect(app.catalog.weights().price).toBe(45);
+  });
+
+  it('treats an empty or zero budget as no limit and a negative budget as excluding everything (v0.4 parity)', () => {
+    setValue('#budget', '');
+    expect(records()).toHaveLength(6);
+    setValue('#budget', '0');
+    expect(records()).toHaveLength(6);
+    setValue('#budget', '-1');
+    expect(records()).toHaveLength(0);
+  });
+
   it('keeps at most two selected products and renders them side by side', () => {
     const select = (id: string) => el(`[data-select="${id}"]`).click();
     expect(el('#comparison').textContent).toBe(NO_SELECTION_TEXT);
@@ -196,8 +246,9 @@ describe('catalog', () => {
     const csv = await lastDownloadText();
     const lines = csv.split('\r\n');
     expect(lines).toHaveLength(visible + 1);
-    expect(lines[0]).toContain('"製品"');
-    expect(lines[0]).toContain('第三者測定(架空)');
+    expect(lines[0]).toBe('"製品","価格(円)","8Ω出力(W/ch)","THD+N(%)","S/N(dB)","適合度(参考)","カバー率(%)","第三者測定(架空)","機能"');
+    // Compact Amp E, balanced weights: price 95.0, power 14.29, S/N 44.0 → (25·95 + 25·14.29 + 20·44) / 70 = 51.60; THD+N missing → ''.
+    expect(lines).toContain('"Compact Amp E","24000","40","","92","51.60","70","なし","usb|bt"');
 
     el('#json').click();
     const json = JSON.parse(await lastDownloadText()) as {
@@ -210,7 +261,15 @@ describe('catalog', () => {
     expect(json.methodologyVersion).toBe(METHODOLOGY_VERSION);
     expect(json.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(json.products).toHaveLength(visible);
-    expect(json.products[0]!.computed.coverage).toBeGreaterThan(0);
+    const e = json.products.find((p) => p.id === 'e') as unknown as {
+      thdn: unknown;
+      fictional: unknown;
+      computed: { coverage: number; status: string };
+    };
+    expect(e.computed.coverage).toBe(0.7);
+    expect(e.computed.status).toBe('scored');
+    expect(e.thdn).toBeNull();
+    expect(e.fictional).toBe(true);
   });
 
   it('reset restores the defaults', () => {
@@ -305,6 +364,8 @@ describe('methodology and accessibility basics', () => {
     const block = el('#methodology [data-methodology-version]');
     expect(block.dataset['methodologyVersion']).toBe(METHODOLOGY_VERSION);
     expect(block.querySelectorAll('li')).toHaveLength(KNOWN_LIMITS.length);
+    expect(KNOWN_LIMITS.length).toBeGreaterThanOrEqual(5);
+    expect(block.textContent).toContain(METHODOLOGY_VERSION);
     expect(block.textContent).toContain('架空');
   });
 

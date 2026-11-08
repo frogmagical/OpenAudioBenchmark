@@ -16,7 +16,6 @@ import type {
   FeatureKey,
   MeasurementConditions,
   MetricKey,
-  NormalizationBounds,
   PresetKey,
   Weights,
 } from './types.ts';
@@ -159,16 +158,6 @@ export const PRESET_LABELS: Readonly<Record<PresetKey, string>> = {
   budget: '価格重視',
 };
 
-/**
- * Fixed reference ranges of the v0.4 demo (amplifiers only). These are
- * temporary illustrative bounds, not a standard.
- */
-export const METRIC_BOUNDS: Readonly<Record<MetricKey, NormalizationBounds>> = {
-  price: { min: 20000, max: 100000, invert: true, scale: 'linear', unit: 'JPY' },
-  power: { min: 20, max: 160, invert: false, scale: 'linear', unit: 'W' },
-  thdn: { min: -4, max: -1, invert: true, scale: 'log10', unit: '%' },
-  snr: { min: 70, max: 120, invert: false, scale: 'linear', unit: 'dB' },
-};
 
 /** Fictional 4 Ω figures were added for the pairing demo only. */
 export const DEMO_AMPS: readonly DemoAmp[] = [
