@@ -523,6 +523,42 @@ describe('sources and evidence view', () => {
     expect(ghost[0]!.querySelector('th')!.querySelector('[data-issue="product.no-measurements"]')).not.toBeNull();
   });
 
+  it('shows speaker metrics (not amplifier metrics) for a fictional speaker product', () => {
+    const base = DEMO_DATASET.measurements[0]!;
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      products: [
+        ...DEMO_DATASET.products,
+        { ...DEMO_DATASET.products[0]!, id: 'spk', name: 'Demo Speaker（架空）', category: 'speaker', features: [] },
+      ],
+      measurements: [
+        ...DEMO_DATASET.measurements,
+        {
+          ...base,
+          id: 'm-spk-sens',
+          productId: 'spk',
+          metric: 'sensitivity',
+          value: 85,
+          unit: 'dB',
+          conditions: { sensitivityReference: '2.83V/1m', distanceM: 1, averaging: 'mean', averagingBandHz: [300, 3000], environment: 'anechoic', instrument: 'Demo NFS（架空）' },
+        },
+        { ...base, id: 'm-spk-znom', productId: 'spk', metric: 'nominalImpedance', value: 8, unit: 'Ω', conditions: {} },
+      ],
+    };
+    document.body.innerHTML = body;
+    initApp(prepareDataset(ds));
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('#evidenceTable tr[data-product-id="spk"]'));
+    expect(rows.map((r) => r.dataset['metric'])).toEqual(['price', 'sensitivity', 'nominalImpedance', 'minimumImpedance', 'crossoverFrequency']);
+    const sens = rows.find((r) => r.dataset['metric'] === 'sensitivity')!;
+    expect(sens.textContent).toContain('85 dB');
+    expect(sens.textContent).toContain('感度基準: 2.83V/1m');
+    expect(sens.textContent).toContain('平均帯域: 300–3000 Hz');
+    expect(sens.textContent).toContain('測定距離: 1 m');
+    expect(rows.find((r) => r.dataset['metric'] === 'minimumImpedance')!.dataset['status']).toBe('missing');
+    // Amplifier metrics are not listed for a speaker, and the catalog still scores only the four amplifier metrics.
+    expect(rows.some((r) => r.dataset['metric'] === 'power')).toBe(false);
+  });
+
   it('escapes source and product text', () => {
     const ds: Dataset = {
       ...DEMO_DATASET,
