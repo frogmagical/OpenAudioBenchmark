@@ -1,0 +1,97 @@
+{
+  "version": "1.0",
+  "purpose": "Claude Code autonomous startup",
+  "repository": "https://github.com/frogmagical/OpenAudioBenchmark",
+  "files": [
+    {
+      "path": ".gitignore",
+      "sha256": "dabf1b5e7108cdd227529c820a9c1fa7bc472567a8f323d4d6c2073f5934dde7",
+      "bytes": 117
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "ca33ed6b424ef5f12768fe45b2d9a8390bfbe84cc4d70284ffd5da21440ca187",
+      "bytes": 2941
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "f1fcc396ec412f0cb0e480344f03f8d7be96d6ea10d99a0b93fcd513fa9db5d7",
+      "bytes": 930
+    },
+    {
+      "path": "README.md",
+      "sha256": "26daaa98e89edbdd1a1990592e82975a74118d475f7c4e4b48ede59b600d72f0",
+      "bytes": 1165
+    },
+    {
+      "path": "START_HERE.md",
+      "sha256": "41b15b50c7ca04aae60652a7a0f431fcdb9c7d4c92999e42f6febbd460403e80",
+      "bytes": 4341
+    },
+    {
+      "path": "docs/DATA_MODEL.md",
+      "sha256": "6d6f956b31f544fa0b0e7b5ae2e41017059405234c1594c1e8584a334253b5a5",
+      "bytes": 1429
+    },
+    {
+      "path": "docs/DECISIONS_AND_RISKS.md",
+      "sha256": "46248a5da706f35f2f2a6cde109a99038536218688e1fac7ac8b3e26c2cd3017",
+      "bytes": 1045
+    },
+    {
+      "path": "docs/IMPLEMENTATION_PLAN.md",
+      "sha256": "15f2201b4ae91675d3babbc5b2ef22e05bbfb2767395f459a50c6e0fd2513de3",
+      "bytes": 1983
+    },
+    {
+      "path": "docs/METHODOLOGY.md",
+      "sha256": "45be2accc8e0c068c04ea58c7cd597f41e9e0de9a36e50afe7c88b536b671cd4",
+      "bytes": 2291
+    },
+    {
+      "path": "docs/ORCHESTRATION.md",
+      "sha256": "ec672465c27e84e3ac54a40e5e6ed773ef43c211b3af35334b7e4c79900b83b9",
+      "bytes": 3412
+    },
+    {
+      "path": "docs/PHASE1_ACCEPTANCE.md",
+      "sha256": "0bb9a47ca22c4cad5575ed8411fc0a88e5ce3c320a4112e92d8182799422b8d0",
+      "bytes": 2283
+    },
+    {
+      "path": "docs/PRODUCT_BRIEF.md",
+      "sha256": "cac8fc517cfda9ab90907d076c2d17dba2c861642c0d3a3c2d1883b87f6cc88e",
+      "bytes": 1212
+    },
+    {
+      "path": "docs/adr/0001-evidence-first.md",
+      "sha256": "a193cf5bf13a16532aca6c1d2b76899902dfcf37c963ea2fd9d1abb76c1e7a4f",
+      "bytes": 440
+    },
+    {
+      "path": "docs/adr/0002-stack.md",
+      "sha256": "f342ef0618f4806014ce5e3c74c0a867b64cd32469fb532b3acfe9726a4feae5",
+      "bytes": 477
+    },
+    {
+      "path": "docs/agent_runs.csv",
+      "sha256": "bb9fa4eb391961c3e8296fb29465e8690f0c213846fa4b7ad95edec2975cc9ef",
+      "bytes": 139
+    },
+    {
+      "path": "docs/tasks/PHASE1_TASKS.md",
+      "sha256": "e74ea4f0f99b57f1b0356b377b34fa5a6395cbda03a0759c953674f42ce23627",
+      "bytes": 2382
+    },
+    {
+      "path": "prototype/SHA256SUMS.txt",
+      "sha256": "e1f8fa7f43f10a8e1465f5f21f3cfd630fd13c09ff04ef2367ec0985df6a2edd",
+      "bytes": 77
+    },
+    {
+      "path": "prototype/index.html",
+      "sha256": "1f591c95c715d61439fe340acf70ecbcee3ff33e03923a9e86e8d4ad537e96f8",
+      "bytes": 41217
+    }
+  ]
+}
