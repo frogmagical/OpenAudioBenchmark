@@ -1,8 +1,8 @@
 # ADR-0007 — 実在製品データの採用ポリシー(草案・PL 技術レビュー済み、PM 承認前)
 
-Status: **PL 技術レビュー済み(2026-11-08、修正条件付き受入)** — 各提案の判定は下表の「PL 判定」列のとおり。PL の受入は PM のマージ承認ではない。本 ADR に基づく実装(採点適格性、`MeasurementReference` 等)は**本工程では行わない**。法的判断(P7)は PM/法務に保留。
+Status: **PL 再レビュー反映済み(2026-11-08、最終技術受入待ち)。PM のマージ承認は未取得。** 各提案の判定は下表の「PL 判定」列のとおり。本 ADR に基づく実装(採点適格性、`MeasurementReference` 等)は**本工程では行わない**。法的判断(P7)は PM/法務に保留。
 
-PL レビューの所在: https://github.com/frogmagical/OpenAudioBenchmark/pull/9 (コメント 2026-11-08T10:39:55Z)、運用ルール: https://github.com/frogmagical/OpenAudioBenchmark/issues/10
+PL レビューの所在: https://github.com/frogmagical/OpenAudioBenchmark/pull/9 (初回 2026-11-08T10:39:55Z、再レビュー 2026-11-08T11:10:04Z)、運用ルール: https://github.com/frogmagical/OpenAudioBenchmark/issues/10
 
 ## 文脈
 
