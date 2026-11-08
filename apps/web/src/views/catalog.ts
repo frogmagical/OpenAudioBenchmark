@@ -64,7 +64,7 @@ function provenanceHtml(prepared: PreparedDataset, productId: string): string {
     const source = m.sourceId ? dataset.sources.find((s) => s.id === m.sourceId) : undefined;
     const sourceText = source ? `${escapeHtml(source.id)}（${escapeHtml(source.publisher)}）` : '出典なし';
     const label = isScoringMetric(k) ? METRIC_LABELS[k] : METRIC_NAMES_EXTRA[k];
-    return `<li data-metric="${k}" data-status="${m.status}">${label}：${STATUS_LABELS[m.status]} ／ ${sourceText}</li>`;
+    return `<li data-metric="${k}" data-status="${escapeHtml(m.status)}">${label}：${escapeHtml(STATUS_LABELS[m.status] ?? String(m.status))} ／ ${sourceText}</li>`;
   }).join('');
   const warnings = projection.issues
     .map((i) => `<li data-issue="${escapeHtml(i.code)}">${escapeHtml(i.message)}</li>`)

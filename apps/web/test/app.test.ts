@@ -5,13 +5,13 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_DATASET, METHODOLOGY_VERSION, prepareDataset } from '@openaudiobenchmark/core';
-import type { Dataset, ReusePermission } from '@openaudiobenchmark/core';
+import type { Dataset, MeasurementReference, RangeMeasurement, ReusePermission } from '@openaudiobenchmark/core';
 import { initApp } from '../src/app.ts';
 import type { App } from '../src/app.ts';
 import { INVALID_INPUT_TEXT } from '../src/views/pairing.ts';
 import { KNOWN_LIMITS } from '../src/views/methodology.ts';
 import { NO_SELECTION_TEXT } from '../src/views/compare.ts';
-import { renderSources } from '../src/views/sources.ts';
+import { renderSources, renderSourcesUnchecked } from '../src/views/sources.ts';
 import html from '../index.html?raw';
 
 const body = html.split('<body>')[1]!.split('<script')[0]!;
@@ -478,7 +478,7 @@ describe('sources and evidence view', () => {
     'x" onerror="alert(1)',
     'x" onerror="alert(1)"><img src=x onerror="alert(1)">',
   ])('escapes hostile reuse attributes and fallback labels: %s', (hostile) => {
-    // A source-only fixture tests renderer escaping directly, independently of the ingestion gate.
+    // A source-only fixture: the public renderer must refuse it (gate), and the unchecked renderer must still escape it.
     const source = DEMO_DATASET.sources[0]!;
     const ds: Dataset = {
       ...DEMO_DATASET, products: [], measurements: [], references: [], ranges: [],
@@ -490,7 +490,10 @@ describe('sources and evidence view', () => {
     const prepared = prepareDataset(ds);
     expect(prepared.usable).toBe(false);
     expect(prepared.errors).toEqual([expect.objectContaining({ code: 'source.reuse-value-invalid' })]);
-    renderSources(prepared);
+    const before = el('#sourcesView').innerHTML;
+    expect(() => renderSources(prepared)).toThrow(/source\.reuse-value-invalid/);
+    expect(el('#sourcesView').innerHTML).toBe(before);
+    renderSourcesUnchecked(prepared);
     expect(document.querySelectorAll('[onerror]')).toHaveLength(0);
     expect(document.querySelectorAll('#sourcesView img, #sourcesView script')).toHaveLength(0);
     expect(document.querySelectorAll('#sourcesTable tbody tr')).toHaveLength(1);
@@ -500,6 +503,41 @@ describe('sources and evidence view', () => {
     expect(cell.getAttribute('data-reuse')).toBe(hostile);
     expect(cell.textContent).toBe(hostile);
     expect(cell.children).toHaveLength(0);
+  });
+
+  it.each(['reference', 'range'] as const)('rejects a hostile %s status at the gate and escapes it in the unchecked renderer', (kind) => {
+    const hostile = 'observed" onmouseover="alert(1)';
+    const amp = DEMO_DATASET.products[0]!;
+    const source = DEMO_DATASET.sources[0]!;
+    const speaker = { ...amp, id: 'spk-hostile', name: 'Hostile speaker（架空）', category: 'speaker' as const, features: [] };
+    const ref: MeasurementReference = {
+      id: 'ref-hostile', productId: amp.id, metric: 'power', sourceId: source.id, quantities: ['output power'],
+      conditions: {}, status: hostile as unknown as MeasurementReference['status'], accessedAt: '2026-11-08', notes: null,
+    };
+    const range: RangeMeasurement = {
+      id: 'range-hostile', productId: speaker.id, metric: 'frequencyRange', lowHz: 47, highHz: 45000, toleranceDb: -6,
+      toleranceKind: 'minus', status: hostile as unknown as RangeMeasurement['status'], sourceId: source.id,
+      conditions: {}, capturedAt: null, version: 1, notes: null,
+    };
+    const ds: Dataset = kind === 'reference'
+      ? { ...DEMO_DATASET, references: [ref] }
+      : { ...DEMO_DATASET, products: [...DEMO_DATASET.products, speaker], ranges: [range] };
+    const prepared = prepareDataset(ds);
+    expect(prepared.usable).toBe(false);
+    expect(prepared.errors.map((e) => e.code)).toEqual([`${kind}.status-invalid`]);
+    const before = el('#sourcesView').innerHTML;
+    expect(() => renderSources(prepared)).toThrow(new RegExp(`${kind}\\.status-invalid`));
+    expect(el('#sourcesView').innerHTML).toBe(before);
+    expect(() => initApp(prepared)).toThrow(new RegExp(`${kind}\\.status-invalid`));
+    // Projection asserts the gate too, so simulate a bypassed gate to prove the markup itself is escaped.
+    renderSourcesUnchecked({ ...prepared, usable: true, errors: [] });
+    expect(document.querySelectorAll('[onmouseover]')).toHaveLength(0);
+    const row = el(`tr[data-${kind}-id]`);
+    expect(row.getAttribute('data-status')).toBe(kind === 'reference' ? 'reference' : hostile);
+    const pill = el(`tr[data-${kind}-id] .status-pill`);
+    expect(pill.getAttribute('data-status')).toBe(hostile);
+    expect(pill.textContent).toBe(hostile);
+    expect(pill.children).toHaveLength(0);
   });
 
   it('rejects an invalid reuse permission at app startup even when there are no products', () => {

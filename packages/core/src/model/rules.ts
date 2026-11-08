@@ -104,11 +104,58 @@ export const RELEVANT_CONDITIONS: Readonly<Record<MetricId, readonly (keyof Meas
 };
 
 /** Required condition keys that are unrecorded on a measurement-like record. */
+/** Vocabulary of the enumerated condition keys. A runtime guard: TypeScript unions do not validate loaded data. */
+export const CONDITION_VOCABULARY: Readonly<Partial<Record<keyof MeasurementConditions, readonly string[]>>> = {
+  loadType: ['resistive', 'reactive', 'speaker', 'open'],
+  weighting: ['A', 'unweighted', 'CCIR', 'demo-assumed'],
+  environment: ['anechoic', 'quasi-anechoic', 'in-room', 'bench'],
+  sensitivityReference: ['2.83V/1m', '1W/1m'],
+};
+const TEXT_CONDITIONS: readonly string[] = ['instrument', 'testSignal', 'averaging', 'distortionCriterion', 'inputSignal', 'outputLevel', 'method'];
+const POSITIVE_CONDITIONS: readonly string[] = ['frequencyHz', 'loadOhms', 'distanceM'];
+const BAND_CONDITIONS: readonly string[] = ['bandwidthHz', 'averagingBandHz'];
+
+/**
+ * Why a recorded condition value is unusable, or `null` when it is well-formed. `undefined` means
+ * "not recorded" and is never a problem here; `null` is rejected (omit the key instead). Values arrive
+ * from JSON at runtime, so every shape is checked — type, vocabulary, sign, tuple shape and unknown keys —
+ * not only what TypeScript would allow.
+ */
+export function conditionValueProblem(key: string, value: unknown): string | null {
+  if (value === undefined) return null;
+  if (value === null) return `${key} は null 不可(未記録なら省略)`;
+  if (TEXT_CONDITIONS.includes(key)) {
+    if (typeof value !== 'string') return `${key} は文字列`;
+    return value.trim() === '' ? `${key} が空文字` : null;
+  }
+  const vocabulary = CONDITION_VOCABULARY[key as keyof MeasurementConditions];
+  if (vocabulary) return typeof value === 'string' && vocabulary.includes(value) ? null : `${key} は ${vocabulary.join(' | ')} のいずれか`;
+  if (POSITIVE_CONDITIONS.includes(key)) return typeof value === 'number' && Number.isFinite(value) && value > 0 ? null : `${key} は正の有限値`;
+  if (key === 'channelsDriven') return typeof value === 'number' && Number.isInteger(value) && value > 0 ? null : 'channelsDriven は正の整数';
+  if (BAND_CONDITIONS.includes(key)) {
+    if (!Array.isArray(value) || value.length !== 2 || !value.every((v) => typeof v === 'number' && Number.isFinite(v))) return `${key} は [low, high] の有限数値の組`;
+    const [low, high] = value as [number, number];
+    if (low <= 0 || low > high) return `${key} は 0 < low ≤ high`;
+    if (key === 'bandwidthHz' && low === high) return 'bandwidthHz は low < high';
+    return null;
+  }
+  return `${key} は未知の条件キー`;
+}
+
+/**
+ * A condition counts as recorded only when it is present and well-formed. A blank string, `null` or a
+ * malformed value records nothing, for required and comparison-only conditions alike (final-audit finding 2).
+ */
+export function isConditionRecorded(key: keyof MeasurementConditions, conditions: MeasurementConditions): boolean {
+  const value = conditions[key];
+  return value !== undefined && conditionValueProblem(key, value) === null;
+}
+
 export function unrecordedRequiredConditions(
   metric: MetricId,
   conditions: MeasurementConditions,
 ): (keyof MeasurementConditions)[] {
-  return REQUIRED_CONDITIONS[metric].filter((key) => conditions[key] === undefined);
+  return REQUIRED_CONDITIONS[metric].filter((key) => !isConditionRecorded(key, conditions));
 }
 
 /** Shared Japanese message for unrecorded required conditions (validation, projection, comparability). */

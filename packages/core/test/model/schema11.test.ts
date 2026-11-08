@@ -13,8 +13,9 @@ import { evaluateProduct } from '../../src/model/evaluate.ts';
 import { projectMetric, projectProduct, toMetricValues } from '../../src/model/project.ts';
 import {
   COMPARISON_REQUIRED_CONDITIONS, CONDITION_LABELS, METRIC_CATEGORIES, METRIC_UNITS,
-  RELEVANT_CONDITIONS, REQUIRED_CONDITIONS, VALUE_DOMAIN, formatConditionValue,
+  RELEVANT_CONDITIONS, REQUIRED_CONDITIONS, VALUE_DOMAIN, formatConditionValue, unrecordedRequiredConditions,
 } from '../../src/model/rules.ts';
+import { buildCatalogJson } from '../../src/export.ts';
 import {
   DATASET_SCHEMA_VERSION, METRIC_IDS, REUSE_UNCHECKED, SPEAKER_METRIC_IDS, isScoringMetric,
 } from '../../src/model/types.ts';
@@ -489,5 +490,97 @@ describe('recorded condition value validation', () => {
       expect(errors(withReference({ conditions }))).toEqual([]);
       expect(errors(withRange({ conditions }))).toEqual([]);
     }
+  });
+});
+
+describe('runtime shape guards (final audit: status vocabulary, condition types, export gate)', () => {
+  const hostile = 'observed" onmouseover="alert(1)';
+
+  it('rejects an evidence status outside the vocabulary on measurements, references and ranges', () => {
+    const status = hostile as unknown as Measurement['status'];
+    expectError(withMeasurement({ status }), 'measurement.status-invalid', 'measurements[0]', [base.id]);
+    expectError(withReference({ status: status as MeasurementReference['status'] }), 'reference.status-invalid', 'references[0]', [reference.id]);
+    expectError(withRange({ status: status as RangeMeasurement['status'] }), 'range.status-invalid', 'ranges[0]', [range.id]);
+    // `missing` is a measurement status but never a reference or range status: the record exists.
+    const missing = 'missing' as unknown as MeasurementReference['status'];
+    expectError(withReference({ status: missing }), 'reference.status-invalid', 'references[0]', [reference.id]);
+    expectError(withRange({ status: missing }), 'range.status-invalid', 'ranges[0]', [range.id]);
+    for (const ok of ['observed', 'manufacturer', 'estimated'] as const) {
+      expect(errors(withReference({ status: ok, sourceId: 'DEMO-LAB-001' })).map((e) => e.code)).not.toContain('reference.status-invalid');
+    }
+  });
+
+  const malformed: { name: string; key: string; conditions: Record<string, unknown> }[] = [
+    { name: 'null instrument', key: 'instrument', conditions: { instrument: null } },
+    { name: 'numeric instrument', key: 'instrument', conditions: { instrument: 42 } },
+    { name: 'boolean instrument', key: 'instrument', conditions: { instrument: true } },
+    { name: 'null sensitivity reference', key: 'sensitivityReference', conditions: { sensitivityReference: null } },
+    { name: 'blank sensitivity reference', key: 'sensitivityReference', conditions: { sensitivityReference: '' } },
+    { name: 'numeric sensitivity reference', key: 'sensitivityReference', conditions: { sensitivityReference: 42 } },
+    { name: 'free-text sensitivity reference', key: 'sensitivityReference', conditions: { sensitivityReference: '2.83 V at 1 m' } },
+    { name: 'unknown weighting', key: 'weighting', conditions: { weighting: 'B' } },
+    { name: 'unknown environment', key: 'environment', conditions: { environment: 'outdoor' } },
+    { name: 'unknown load type', key: 'loadType', conditions: { loadType: 'inductive' } },
+    { name: 'string distance', key: 'distanceM', conditions: { distanceM: '1' } },
+    { name: 'null load', key: 'loadOhms', conditions: { loadOhms: null } },
+    { name: 'string channel count', key: 'channelsDriven', conditions: { channelsDriven: '2' } },
+    { name: 'string band', key: 'bandwidthHz', conditions: { bandwidthHz: '20-20000' } },
+    { name: 'one-element band', key: 'averagingBandHz', conditions: { averagingBandHz: [300] } },
+    { name: 'three-element band', key: 'bandwidthHz', conditions: { bandwidthHz: [20, 200, 20000] } },
+    { name: 'string band bounds', key: 'averagingBandHz', conditions: { averagingBandHz: ['300', '3000'] } },
+    { name: 'unknown key', key: 'temperatureC', conditions: { temperatureC: 20 } },
+  ];
+  it.each(malformed)('$name is a condition problem for every record type and never throws', ({ key, conditions }) => {
+    const c = conditions as MeasurementConditions;
+    expect(conditionProblems(c)).toEqual([expect.stringContaining(key)]);
+    for (const [ds, code, path, id] of [
+      [withMeasurement({ conditions: c }), 'measurement.condition-value-invalid', 'measurements[0]', base.id],
+      [withReference({ conditions: c }), 'reference.condition-value-invalid', 'references[0]', reference.id],
+      [withRange({ conditions: c }), 'range.condition-value-invalid', 'ranges[0]', range.id],
+    ] as const) {
+      expect(() => validateDataset(ds)).not.toThrow();
+      expect(errors(ds)).toContainEqual(expect.objectContaining({ code, path, relatedIds: [id] }));
+    }
+  });
+
+  it('treats null, blank and malformed values as unrecorded for required and comparison-only conditions alike', () => {
+    const sensitivity = (patch: Record<string, unknown>, id = base.id): Measurement => ({
+      ...base, id, productId: speaker.id, metric: 'sensitivity', unit: 'dB', value: 86,
+      conditions: { ...speakerConditions, ...patch } as MeasurementConditions, uncertainty: { type: 'relative', plusMinusPercent: 1 },
+    });
+    const good = sensitivity({});
+    expect(explainComparability(good, sensitivity({}, 'other'))).toEqual({ level: 'comparable', reasons: [] });
+    for (const sensitivityReference of [null, '', '  ', 42, '2.83 V at 1 m']) {
+      const bad = sensitivity({ sensitivityReference }, 'bad');
+      expect(unrecordedRequiredConditions('sensitivity', bad.conditions)).toEqual(['sensitivityReference']);
+      for (const [left, right] of [[good, bad], [bad, good], [bad, bad]] as const) {
+        const result = explainComparability(left, right);
+        expect(result.level).toBe('not-comparable');
+        expect(result.reasons).toContainEqual({ code: 'conditions.unrecorded', details: ['sensitivityReference'], message: expect.stringContaining('感度基準') });
+      }
+    }
+    for (const instrument of [null, 42, true]) {
+      const bad = sensitivity({ instrument }, 'bad');
+      expect(unrecordedRequiredConditions('sensitivity', bad.conditions)).toEqual([]);
+      const result = explainComparability(good, bad);
+      expect(result.level).toBe('not-comparable');
+      expect(result.reasons).toContainEqual({ code: 'conditions.unrecorded', details: ['instrument'], message: expect.stringContaining('測定機器') });
+      const ds: Dataset = { ...speakerDataset, measurements: [...speakerDataset.measurements, bad] };
+      expect(() => validateDataset(ds)).not.toThrow();
+      expect(errors(ds)).toContainEqual(expect.objectContaining({ code: 'measurement.condition-value-invalid', relatedIds: ['bad'] }));
+    }
+  });
+
+  it('the JSON export refuses an unusable dataset instead of exporting anything from it', () => {
+    const weights = WEIGHT_PRESETS.balanced;
+    expect(JSON.parse(buildCatalogJson([], weights, { date: '2026-11-08', dataset: DEMO_DATASET })).datasetSchemaVersion).toBe('1.1');
+    const wrongVersion = { ...DEMO_DATASET, schemaVersion: '0.9' } as unknown as Dataset;
+    expect(() => buildCatalogJson([], weights, { date: '2026-11-08', dataset: wrongVersion })).toThrow(/dataset\.schema-version/);
+    const first = DEMO_DATASET.sources[0]!;
+    const sourceOnly: Dataset = {
+      ...DEMO_DATASET, products: [], measurements: [], references: [], ranges: [],
+      sources: [{ ...first, reuse: { ...first.reuse, quoteFacts: hostile as unknown as ReusePermission } }],
+    };
+    expect(() => buildCatalogJson([], weights, { date: '2026-11-08', dataset: sourceOnly })).toThrow(/source\.reuse-value-invalid/);
   });
 });

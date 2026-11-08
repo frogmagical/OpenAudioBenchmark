@@ -12,6 +12,7 @@ import {
   METRIC_UNITS,
   PREPARED_DEMO_DATASET,
   STATUS_LABELS,
+  assertUsable,
   formatConditionValue,
   projectProduct,
 } from '@openaudiobenchmark/core';
@@ -64,8 +65,9 @@ export const STATUS_DESCRIPTIONS: Readonly<Record<MeasurementStatus, string>> = 
   missing: '値が存在しない。0点でも満点でもなく「不明」',
 };
 
+// Status strings come from the dataset: escaped like every other value, and an unknown status shows itself as text.
 function pill(status: MeasurementStatus): string {
-  return `<span class="status-pill" data-status="${status}">${STATUS_LABELS[status]}</span>`;
+  return `<span class="status-pill" data-status="${escapeHtml(status)}">${escapeHtml(STATUS_LABELS[status] ?? String(status))}</span>`;
 }
 
 function formatUncertainty(u: Uncertainty | null): string {
@@ -96,9 +98,16 @@ function link(url: string | null): string {
   return `${escapeHtml(trimmed)} <span class="small">（リンク化しない形式）</span>`;
 }
 
-// The dataset gate is asserted once at startup (initApp). The renderer itself still escapes every value,
-// so it stays safe even when driven directly with an unvalidated dataset (defence in depth, tested).
+/** Public renderer: refuses an unusable dataset (quality gate), independently of the product count. */
 export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET): void {
+  renderSourcesUnchecked(assertUsable(prepared));
+}
+
+/**
+ * Renderer without the gate. Exported only so tests can prove the markup escapes hostile values even for a
+ * dataset the gate would reject (defence in depth); the app never calls it directly.
+ */
+export function renderSourcesUnchecked(prepared: PreparedDataset): void {
   const target = qs('#sourcesView');
   const { dataset } = prepared;
   const citations = new Map<string, number>();
@@ -155,7 +164,7 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
         : '';
       const warnings = m.issues.map((w) => `<li data-issue="${escapeHtml(w.code)}">${escapeHtml(w.message)}</li>`).join('');
       return (
-        `<tr data-product-id="${escapeHtml(p.id)}" data-metric="${k}" data-status="${m.status}">` +
+        `<tr data-product-id="${escapeHtml(p.id)}" data-metric="${k}" data-status="${escapeHtml(m.status)}">` +
         (i === 0
           ? `<th scope="rowgroup" rowspan="${metricList.length}">${escapeHtml(p.name)}<br><span class="small">${escapeHtml(p.maker)}${p.revision ? ` / ${escapeHtml(p.revision)}` : ''}</span>${productIssues(p.id)}</th>`
           : '') +
@@ -172,7 +181,7 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
         return (
           `<tr data-product-id="${escapeHtml(p.id)}" data-reference-id="${escapeHtml(r.id)}" data-status="reference">` +
           `<td>${METRIC_NAMES[r.metric]}</td><td class="num">出典で確認${src ? `<br>${link(src.url)}` : ''}</td>` +
-          `<td><span class="status-pill" data-status="${r.status}">${STATUS_LABELS[r.status]}</span><div class="small">所在のみ（数値は未保存）: ${r.quantities.map(escapeHtml).join('、')}</div></td>` +
+          `<td>${pill(r.status)}<div class="small">所在のみ（数値は未保存）: ${r.quantities.map(escapeHtml).join('、')}</div></td>` +
           `<td class="id">${escapeHtml(r.sourceId)}</td><td>${conditionsList(r.conditions)}</td><td>—</td><td><span class="small">数値の利用条件が未確認のため所在のみ</span></td></tr>`
         );
       });
@@ -181,7 +190,7 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
       .filter((r) => r.productId === p.id)
       .map(
         (r) =>
-          `<tr data-product-id="${escapeHtml(p.id)}" data-range-id="${escapeHtml(r.id)}" data-status="${r.status}">` +
+          `<tr data-product-id="${escapeHtml(p.id)}" data-range-id="${escapeHtml(r.id)}" data-status="${escapeHtml(r.status)}">` +
           `<td>周波数範囲</td><td class="num">${r.lowHz}–${r.highHz} Hz（${r.toleranceKind === 'minus' ? `${r.toleranceDb} dB` : `±${r.toleranceDb} dB`}）</td>` +
           `<td>${pill(r.status)}<div class="small">版 ${r.version}${r.capturedAt ? ` ／ 測定日 ${escapeHtml(r.capturedAt)}` : ''}</div></td>` +
           `<td class="id">${escapeHtml(r.sourceId)}</td><td>${conditionsList(r.conditions)}</td><td>—</td><td><span class="small">なし</span></td></tr>`,

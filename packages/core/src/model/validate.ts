@@ -4,7 +4,7 @@
  */
 import { compareConditions } from '../conditions.ts';
 import { isCalendarDate, isInvalidUncertainty, isZeroUncertainty } from './common.ts';
-import { isValueInDomain, METRIC_CATEGORIES, METRIC_UNITS, RELEVANT_CONDITIONS, unrecordedConditionsMessage, unrecordedRequiredConditions, VALUE_DOMAIN } from './rules.ts';
+import { conditionValueProblem, isValueInDomain, METRIC_CATEGORIES, METRIC_UNITS, RELEVANT_CONDITIONS, STATUS_PRIORITY, unrecordedConditionsMessage, unrecordedRequiredConditions, VALUE_DOMAIN } from './rules.ts';
 import { DATASET_SCHEMA_VERSION, NUMBER_STORAGE_PERMITTED } from './types.ts';
 import type { Dataset, Measurement, QualityIssue, Source } from './types.ts';
 import type { MeasurementConditions } from '../types.ts';
@@ -29,8 +29,11 @@ import type { MeasurementConditions } from '../types.ts';
  * - `measurement.source-forbidden`: `status === 'missing'` with a `sourceId` (nothing was measured, so nothing is cited).
  * - `measurement.unit-not-accepted`: `unit` not in `METRIC_UNITS[metric].accepted`.
  * - `measurement.metric-category-mismatch`: metric not allowed for the product's category (`METRIC_CATEGORIES`).
+ * - `measurement.status-invalid` / `reference.status-invalid` / `range.status-invalid`: evidence status outside the
+ *   vocabulary (references and ranges additionally may not be `missing`). Runtime data is not trusted to match the types.
  * - `measurement.condition-value-invalid` / `reference.condition-value-invalid` / `range.condition-value-invalid`:
- *   blank string conditions, non-positive or non-finite numeric conditions, descending bands (`conditionProblems`).
+ *   `null`, wrong type, out-of-vocabulary enum, blank string, non-positive or non-finite numeric, malformed or descending
+ *   band tuple, unknown key (`conditionProblems`, built on `conditionValueProblem`).
  * - `source.reuse-value-invalid`: a reuse permission outside the `ReusePermission` vocabulary.
  * - `reference.status-source-kind-conflict`, `range.source-reuse-not-permitted` (non-fictional), range ids must not
  *   collide with measurement or reference ids.
@@ -79,23 +82,14 @@ import type { MeasurementConditions } from '../types.ts';
  * Returns human-readable problems (empty when fine).
  */
 export function conditionProblems(c: MeasurementConditions): string[] {
-  const problems: string[] = [];
-  for (const key of ['instrument', 'testSignal', 'averaging', 'distortionCriterion', 'inputSignal', 'outputLevel', 'method'] as const) {
-    const v = c[key];
-    if (v !== undefined && v.trim() === '') problems.push(`${key} が空文字`);
-  }
-  for (const key of ['frequencyHz', 'loadOhms', 'distanceM'] as const) {
-    const v = c[key];
-    if (v !== undefined && (!Number.isFinite(v) || v <= 0)) problems.push(`${key} は正の有限値`);
-  }
-  if (c.channelsDriven !== undefined && (!Number.isInteger(c.channelsDriven) || c.channelsDriven <= 0)) problems.push('channelsDriven は正の整数');
-  for (const key of ['bandwidthHz', 'averagingBandHz'] as const) {
-    const v = c[key];
-    if (v !== undefined && (!Number.isFinite(v[0]) || !Number.isFinite(v[1]) || v[0] <= 0 || v[0] > v[1])) problems.push(`${key} は 0 < low ≤ high`);
-  }
-  if (c.bandwidthHz !== undefined && c.bandwidthHz[0] === c.bandwidthHz[1]) problems.push('bandwidthHz は low < high');
-  return problems;
+  return Object.entries(c).flatMap(([key, value]) => {
+    const problem = conditionValueProblem(key, value);
+    return problem === null ? [] : [problem];
+  });
 }
+
+/** Evidence statuses a reference or range may carry (`missing` would contradict the record's existence). */
+const RECORD_STATUSES: readonly string[] = STATUS_PRIORITY.filter((s) => s !== 'missing');
 
 export function validateDataset(dataset: Dataset): QualityIssue[] {
   const issues: QualityIssue[] = [];
@@ -187,6 +181,7 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
       add(code, 'error', path, message, relatedIds);
     };
     if (id.trim() === '') error('measurement.id-empty', '測定の識別子は空にできません');
+    if (!STATUS_PRIORITY.includes(status)) error('measurement.status-invalid', `証拠種別は ${STATUS_PRIORITY.join(' | ')} のいずれかです`);
     if (seenMeasurements.has(id)) error('measurement.duplicate-id', '測定の識別子が重複しています');
     seenMeasurements.add(id);
     if (!productIds.has(productId)) error('measurement.unknown-product', '参照先の製品が見つかりません', [id, productId]);
@@ -274,6 +269,7 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     const path = `references[${index}]`;
     const error = (code: string, message: string, relatedIds = [ref.id]) => add(code, 'error', path, message, relatedIds);
     if (ref.id.trim() === '') error('reference.id-empty', '測定参照の識別子は空にできません');
+    if (!RECORD_STATUSES.includes(ref.status)) error('reference.status-invalid', `測定参照の証拠種別は ${RECORD_STATUSES.join(' | ')} のいずれかです`);
     if (seenReferences.has(ref.id) || seenMeasurements.has(ref.id)) error('reference.duplicate-id', '測定参照の識別子が重複しています');
     seenReferences.add(ref.id);
     const owner = productsById.get(ref.productId);
@@ -296,6 +292,7 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     const path = `ranges[${index}]`;
     const error = (code: string, message: string, relatedIds = [range.id]) => add(code, 'error', path, message, relatedIds);
     if (range.id.trim() === '') error('range.id-empty', '範囲レコードの識別子は空にできません');
+    if (!RECORD_STATUSES.includes(range.status)) error('range.status-invalid', `範囲レコードの証拠種別は ${RECORD_STATUSES.join(' | ')} のいずれかです`);
     if (seenRanges.has(range.id) || seenMeasurements.has(range.id) || seenReferences.has(range.id)) error('range.duplicate-id', '範囲レコードの識別子が重複しています(測定・参照とも共有不可)');
     seenRanges.add(range.id);
     const owner = productsById.get(range.productId);

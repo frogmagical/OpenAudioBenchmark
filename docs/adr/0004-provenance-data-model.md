@@ -46,6 +46,8 @@ Phase 1 carried numbers on the product (`DemoProduct.price/power/thdn/snr`) with
 | `Product.region`, `dimensionsMm`, `massKg`; `FeatureKey` gains optical / coaxial / subout / xlr | G7 |
 | `DATASET_SCHEMA_VERSION = '1.1'`; the fictional demo dataset is migrated in the same change (reuse marked `allowed` with the basis "fictional demonstration data authored by this project") | G8 |
 
+Runtime guards (added after the independent audits): evidence statuses and every condition value are validated at runtime (`*.status-invalid`, `*.condition-value-invalid` via `conditionValueProblem`: type, vocabulary, sign, tuple shape, unknown keys) because loaded data does not carry TypeScript's guarantees; a `null`, blank or malformed condition counts as unrecorded everywhere (`isConditionRecorded`); the views escape status attributes; and the gate is asserted at `initApp`, `renderSources` and `buildCatalogJson`, not only through product projection.
+
 Not in 1.1: scoring eligibility (G9 / D-17) — a separate PR with the demo-result diff for explicit approval (D-18).
 
 ### Effect on the fictional demo (to be approved explicitly, D-18)
