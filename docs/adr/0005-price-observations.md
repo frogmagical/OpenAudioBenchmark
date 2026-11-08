@@ -1,6 +1,6 @@
 # ADR-0005 — Prices as observations (P2-3A)
 
-Status: **proposed** — data model, validation, tracked conversion and comparable-group summaries are implemented for review. The policy choices listed under "Decisions for the PL" are implemented with the stated defaults but are not final, and nothing here feeds the utility score yet.
+Status: **accepted in part** (PL review 2026-11-08). The data model, validation, tracked conversion, pairwise comparability and comparable-group summaries are accepted with the policy below. Connecting price observations to the utility score remains **unapproved**.
 
 ## Context
 
@@ -15,23 +15,29 @@ Phase 1 carried one `price` per product as a plain reference figure. Real prices
 - `summarizePrices`: groups by currency / kind / item condition / tax / shipping / bundle / locale, never merges groups, excludes null and zero amounts (listed separately), min / median / max on unrounded values, lineage with an `aggregate` step that states what is still merged (merchants, coupons, dates).
 - Fictional demo observations and one fictional rate exercise every branch; the demo dataset validates with zero errors.
 
-## Decisions for the PL (defaults implemented; change requires only this ADR)
+## Policy approved by the PL (2026-11-08)
 
-| # | Question | Default in code |
+| Topic | Approved rule | Where enforced |
 | --- | --- | --- |
-| D1 | Which differences block a pairwise comparison vs caveat | block: kind, item condition, tax/shipping true vs false, bundle, locale; caveat: merchant, coupon, day gap, unstated tax/shipping |
-| D2 | Rounding | never before aggregation; display rounded half-up to minor unit |
-| D3 | Aggregation scope | per currency / kind / condition / tax / shipping / bundle / locale; merchants, coupons and dates merged with a lineage note; no time window |
-| D4 | "Conversion date-time" | the rate's applicable date and source are recorded; the wall-clock time of conversion is not (pure function); no check on the gap between observation and rate date |
-| D5 | List price from a non-manufacturer source | error (retailer "参考価格" would need its own `kind` or a relaxation to warning) |
-| D6 | `locale` vocabulary | free text, compared literally; a closed region list and VAT-rate modelling are open |
-| D7 | Model gaps | quantity / price-per-unit for bundles, stock state vs "ask" vs not captured, price ranges, financing terms, b-stock / demo-unit conditions, quotes |
-| D8 | Offsets | ±14:00 accepted, `-00:00` rejected, year 0000 accepted |
-| D9 | Currencies | JPY, USD, EUR, GBP, CNY |
-| D10 | Day gap | computed on the recorded local calendar date |
-| D11 | Relationship to scoring | the utility score still uses the legacy `price` Measurement; selecting a reference price from observations (e.g. latest new tax-included JPY street price) is a methodology change and is **not** implemented |
+| Blocking differences | new/used (item condition), price kind (list / street / sold), a clear tax or shipping difference (included vs not), bundle contents, market (locale) → direct comparison withheld | `BLOCKING_CONDITION_KEYS`, `explainPriceComparability` (`not-comparable`) |
+| Caveats | merchant, coupon, observation date-time gap, **unstated** tax or shipping → reported as 注意, comparison allowed | `CAVEAT_CONDITION_KEYS`, caveat reasons |
+| Rounding | internal values unrounded; rounding only for display (half-up, minor unit) | `convertPrice.value` vs `.display`; summaries aggregate unrounded values |
+| Aggregation | never across condition groups (currency / kind / item condition / tax / shipping / bundle / locale); aggregation without a time window is **descriptive only**, not an input to any score | `summarizePrices`, `aggregate` step note |
+| Currency conversion | requires rate date, source and direction (`to` per 1 `from`); never inverted or chained | `ExchangeRate`, `convertPrice`, `rate.*` validation |
+| List price | manufacturer sources only (error otherwise) | `price.list-from-non-manufacturer` |
+
+## Open items (recorded, not approved)
+
+| # | Item | Status |
+| --- | --- | --- |
+| O1 | Consistency check between `observedAt` and the exchange rate's `rateDate` | **Mandatory for a future revision**; not enforced yet (no gap rule defined) |
+| O2 | Market code normalisation (`locale` vocabulary), VAT-rate modelling | follow-up task |
+| O3 | Model extensions: stock / availability state, quantity and price-per-unit, bundle breakdown, price ranges, financing terms, b-stock / demo units, quotes | follow-up task |
+| O4 | Connecting price observations to the utility score (reference-price selection) | **unapproved**; the legacy `price` Measurement remains the scorer's input |
+| O5 | Accepted currencies (JPY, USD, EUR, GBP, CNY), UTC offset range ±14:00, day-gap on recorded local date | implemented defaults, may be revised without a methodology change |
 
 ## Consequences
 
 - Price data can be entered only as observations with source and conditions; the gate reports violations before anything is displayed.
-- A UI for observations (per-product price table with conditions and comparability reasons) follows in the sources view once this ADR is accepted.
+- A UI for observations (per-product price table with conditions and comparability reasons) can now follow in the sources view.
+- Any proposal to use observations for scoring must come with basis, scope, counter-examples, behaviour on missing data and a verification method, and go through PL review (O4).
