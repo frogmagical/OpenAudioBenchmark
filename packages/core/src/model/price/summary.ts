@@ -1,7 +1,8 @@
-/** Aggregation of comparable price observations only. Implemented by the core worker. */
+/** Aggregation of comparable price observations only. */
 import type { TransformStep } from '../types.ts';
-import type { Currency, ExchangeRate, PriceObservation } from './types.ts';
+import type { ConvertedPrice, Currency, ExchangeRate, PriceObservation } from './types.ts';
 import { convertPrice } from './convert.ts';
+import { BLOCKING_CONDITION_KEYS } from './rules.ts';
 
 export interface PriceGroupKey {
   readonly currency: Currency;
@@ -10,6 +11,8 @@ export interface PriceGroupKey {
   readonly taxIncluded: boolean | null;
   readonly shippingIncluded: boolean | null;
   readonly bundle: string | null;
+  /** Market / region: prices from different markets are never aggregated (ADR-0005 D3). */
+  readonly locale: string;
 }
 
 export interface PriceSummary {
@@ -38,14 +41,17 @@ export interface PriceSummary {
  * - Output sorted by key (currency, kind, itemCondition, taxIncluded, shippingIncluded, bundle) for stability.
  */
 export function summarizePrices(productId: string, observations: readonly PriceObservation[], target: Currency, rates: readonly ExchangeRate[] = []): PriceSummary[] {
-  const groups = new Map<string, { key: PriceGroupKey; records: { observation: PriceObservation; converted: ReturnType<typeof convertPrice> }[] }>();
+  const groups = new Map<string, { key: PriceGroupKey; records: { observation: PriceObservation; converted: ConvertedPrice }[] }>();
   for (const observation of observations) {
     if (observation.productId !== productId) continue;
     const conversion = convertPrice(observation, target, rates);
     const canConvert = observation.currency === target || (conversion.rateId !== null && (conversion.value !== null || observation.amount === null));
     const converted = canConvert ? conversion : convertPrice(observation, observation.currency, []);
-    const { itemCondition, taxIncluded, shippingIncluded, bundle } = observation.conditions;
-    const key: PriceGroupKey = { currency: converted.currency, kind: observation.kind, itemCondition, taxIncluded, shippingIncluded, bundle };
+    const { itemCondition, taxIncluded, shippingIncluded, bundle, locale } = observation.conditions;
+    // Every blocking condition key is part of the grouping key, so a group never spans conditions
+    // that would make a pairwise comparison not-comparable.
+    const key: PriceGroupKey = { currency: converted.currency, kind: observation.kind, itemCondition, taxIncluded, shippingIncluded, bundle, locale };
+    for (const k of BLOCKING_CONDITION_KEYS) if (!(k in key)) throw new Error(`grouping key misses blocking condition ${k}`);
     const serialized = JSON.stringify(key);
     const group = groups.get(serialized) ?? { key, records: [] };
     group.records.push({ observation, converted });
@@ -55,7 +61,7 @@ export function summarizePrices(productId: string, observations: readonly PriceO
   // Explicit null < false < true; null bundles precede every non-null string.
   const compareNullable = (a: string | boolean | null, b: string | boolean | null): number =>
     a === b ? 0 : a === null ? -1 : b === null ? 1 : compareText(String(a), String(b));
-  const keys = ['currency', 'kind', 'itemCondition', 'taxIncluded', 'shippingIncluded', 'bundle'] as const;
+  const keys = ['currency', 'kind', 'itemCondition', 'taxIncluded', 'shippingIncluded', 'bundle', 'locale'] as const;
   return [...groups.values()].sort((a, b) => {
     for (const key of keys) {
       const order = compareNullable(a.key[key], b.key[key]);
@@ -80,9 +86,13 @@ export function summarizePrices(productId: string, observations: readonly PriceO
     const steps: TransformStep[] = [
       { op: 'select-measurement', input: records.map(({ observation }) => observation), output: observationIds,
         note: `価格集計 price-summary-v1: 製品 ${productId} の条件別観測を選択。原観測の未観測と金額0は除外: ${excludedIds.join('、') || 'なし'}` },
-      ...records.flatMap(({ converted }) => converted.steps),
-      { op: 'normalize', input: { methodologyVersion: 'price-summary-v1', key, observationIds, values }, output: { count, min, median, max },
-        note: '価格集計 price-summary-v1: 同じ通貨・価格種別・商品状態・税・送料・セット内容ごとに最小値、中央値（偶数件は中央2値の平均）、最大値を算出。販売店・地域・クーポン・観測日時は集計キーに含まず、補正していません。原観測の条件と期間を確認してください。税・送料が未記録の群は条件一致を保証しません。' },
+      // Only real conversions and withholds are listed; identity conversions add nothing to the lineage.
+      ...records.flatMap(({ observation, converted }) => (observation.currency === converted.currency && converted.value !== null ? [] : converted.steps)),
+      { op: 'aggregate', input: { methodologyVersion: 'price-summary-v1', key, observationIds, values }, output: { count, min, median, max },
+        note: `価格集計 price-summary-v1: 同じ通貨・価格種別・商品状態・税・送料・セット内容・地域ごとに最小値、中央値（偶数件は中央2値の平均）、最大値を未丸め値で算出。` +
+          `この群で区別せずに含めたもの: 販売店 ${[...new Set(included.map(({ observation }) => observation.merchant))].join('、') || 'なし'}、` +
+          `クーポン ${included.filter(({ observation }) => observation.conditions.couponApplied !== null).length} 件、観測日 ${dates[0] ?? '—'}〜${dates.at(-1) ?? '—'}。` +
+          `税・送料が未記録の群は条件一致を保証しません。` },
     ];
     return { productId, key, observationIds, excludedIds, count, min, median, max,
       earliestObservedAt: dates[0] ?? null, latestObservedAt: dates.at(-1) ?? null, steps };

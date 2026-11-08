@@ -25,12 +25,20 @@ const listPrices: PriceObservation[] = DEMO_DATASET.products.flatMap((product) =
   const price = DEMO_DATASET.measurements.find((measurement) => measurement.productId === product.id
     && measurement.metric === 'price' && measurement.sourceId?.startsWith('DEMO-MFG-'));
   if (!price?.sourceId) return [];
-  return [street(product.id, 'list', price.value, { kind: 'list', sourceId: price.sourceId, merchant: 'Demo Audio（架空）' })];
+  // An MSRP has no shipping term: recorded as unstated (null), which the validator reports as a warning.
+  return [street(product.id, 'list', price.value, {
+    kind: 'list', sourceId: price.sourceId, merchant: 'Demo Audio（架空）',
+    conditions: { itemCondition: 'new', taxIncluded: true, shippingIncluded: null, couponApplied: null, bundle: null, locale: 'JP' },
+  })];
 });
 
 const streets: PriceObservation[] = [
   street('a', 'street', 42000),
-  street('a', 'usd', 280, { currency: 'USD', sourceId: 'DEMO-RETAIL-002', merchant: 'Demo Retail 002（架空）' }),
+  // US market, pre-tax display: a realistic cross-market pair that is NOT comparable with the JP street price.
+  street('a', 'usd', 280, {
+    currency: 'USD', sourceId: 'DEMO-RETAIL-002', merchant: 'Demo Retail 002（架空）',
+    conditions: { itemCondition: 'new', taxIncluded: false, shippingIncluded: true, couponApplied: null, bundle: null, locale: 'US' },
+  }),
   street('b', 'street', 33000),
   street('b', 'used', 21000, { conditions: { itemCondition: 'used', taxIncluded: true, shippingIncluded: true, couponApplied: null, bundle: null, locale: 'JP' } }),
   street('c', 'coupon', 29000, { conditions: { itemCondition: 'new', taxIncluded: true, shippingIncluded: true, couponApplied: '架空の1000円引きクーポン適用済み', bundle: null, locale: 'JP' } }),

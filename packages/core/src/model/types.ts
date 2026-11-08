@@ -106,7 +106,7 @@ export interface QualityIssue {
 
 /** One tracked step from an original record to a derived value. */
 export interface TransformStep {
-  readonly op: 'select-measurement' | 'unit-convert' | 'withhold' | 'normalize';
+  readonly op: 'select-measurement' | 'unit-convert' | 'aggregate' | 'withhold' | 'normalize';
   readonly input: unknown;
   readonly output: unknown;
   readonly note: string;

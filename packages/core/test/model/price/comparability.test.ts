@@ -16,7 +16,7 @@ const blockers: [string, Partial<PriceObservation>, string[]][] = [
   ['condition.item-differs', conditions({ itemCondition: 'used' }), ['新品', '中古']],
   ['condition.tax-differs', conditions({ taxIncluded: false }), ['税込', '税抜']],
   ['condition.shipping-differs', conditions({ shippingIncluded: false }), ['送料込み', '送料別']],
-  ['condition.bundle-differs', conditions({ bundle: '架空スピーカー付き' }), ['製品単体', '架空スピーカー付き']],
+  ['condition.bundle-differs', conditions({ bundle: '架空スピーカー付き' }), ['（セットなし）', '架空スピーカー付き']],
 ];
 const caveats: [string, Partial<PriceObservation>, string[]][] = [
   ['currency.converted', { currency: 'USD' }, ['JPY', 'USD', rate.id]],
@@ -24,7 +24,7 @@ const caveats: [string, Partial<PriceObservation>, string[]][] = [
   ['condition.shipping-unstated', conditions({ shippingIncluded: null }), ['送料込み', '未記録']],
   ['condition.coupon-applied', conditions({ couponApplied: '架空の10%引き' }), ['なし', '架空の10%引き']],
   ['merchant.differs', { merchant: '架空店B' }, [base.merchant, '架空店B']],
-  ['locale.differs', conditions({ locale: 'US' }), ['JP', 'US']],
+
   ['observed-at.gap', { observedAt: '2026-11-10T09:00:00+09:00' }, [base.observedAt, '2026-11-10', '2日']],
   ['zero-price', { amount: 0, zeroPriceReason: '架空の販促無償提供' }, ['架空の販促無償提供']],
 ];
@@ -84,7 +84,7 @@ describe('price comparability rules', () => {
       merchant: '架空店B', observedAt: '2026-11-10T09:00:00+09:00',
       conditions: Object.freeze({ ...base.conditions, itemCondition: 'used' as const, taxIncluded: false, shippingIncluded: false, bundle: '架空セット', couponApplied: '架空クーポン', locale: 'US' }),
     });
-    const expected = ['amount.missing', 'currency.differs', 'kind.differs', 'condition.item-differs', 'condition.tax-differs', 'condition.shipping-differs', 'condition.bundle-differs', 'condition.coupon-applied', 'merchant.differs', 'locale.differs', 'observed-at.gap', 'zero-price'];
+    const expected = ['amount.missing', 'currency.differs', 'kind.differs', 'condition.item-differs', 'condition.tax-differs', 'condition.shipping-differs', 'condition.bundle-differs', 'condition.locale-differs', 'condition.coupon-applied', 'merchant.differs', 'observed-at.gap', 'zero-price'];
     const before = JSON.stringify([a, b]);
     for (const rates of [[], [rate]]) {
       const result = explainPriceComparability(a, b, rates);
@@ -95,5 +95,34 @@ describe('price comparability rules', () => {
       expect(new Set(reverse.reasons.map((reason) => reason.code))).toEqual(new Set(result.reasons.map((reason) => reason.code)));
     }
     expect(JSON.stringify([a, b])).toBe(before);
+  });
+});
+
+describe('market (locale) is a blocking condition; bundle placeholder is distinct from literal text', () => {
+  const base = DEMO_PRICE_OBSERVATIONS.find((p) => p.id === 'demo-price-a-street')!;
+  it('blocks a cross-market pair even in the same currency', () => {
+    const us = { ...base, id: 'us', conditions: { ...base.conditions, locale: 'US' } };
+    const result = explainPriceComparability(base, us);
+    expect(result.level).toBe('not-comparable');
+    const locale = result.reasons.find((r) => r.code === 'condition.locale-differs')!;
+    expect(locale.details).toEqual(['JP', 'US']);
+    expect(locale.message).toContain('JP');
+    expect(locale.message).toContain('US');
+  });
+  it('distinguishes "no bundle" from a literal bundle text', () => {
+    const literal = { ...base, id: 'lit', conditions: { ...base.conditions, bundle: '製品単体' } };
+    const reason = explainPriceComparability(base, literal).reasons.find((r) => r.code === 'condition.bundle-differs')!;
+    expect(reason.message).toContain('（セットなし）');
+    expect(reason.message).toContain('製品単体');
+    expect(reason.details).toEqual(['（セットなし）', '製品単体']);
+  });
+  it('demo: the JP street price and the US pre-tax price are not comparable, with the reasons named', () => {
+    const usd = DEMO_PRICE_OBSERVATIONS.find((p) => p.id === 'demo-price-a-usd')!;
+    const result = explainPriceComparability(base, usd, DEMO_EXCHANGE_RATES);
+    expect(result.level).toBe('not-comparable');
+    const codes = result.reasons.map((r) => r.code);
+    expect(codes).toContain('condition.locale-differs');
+    expect(codes).toContain('condition.tax-differs');
+    expect(codes).toContain('currency.converted');
   });
 });

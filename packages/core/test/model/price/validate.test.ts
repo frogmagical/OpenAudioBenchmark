@@ -22,14 +22,31 @@ function freeze(value: unknown): void {
 }
 
 describe('price validation contract', () => {
-  it('has zero demo errors and exactly the three intentional warnings', () => {
+  it('has zero demo errors and exactly the intended warnings (list prices have no shipping term)', () => {
     expect(errors(demo)).toEqual([]);
     expect(arePricesUsable(demo)).toBe(true);
-    expect(validatePriceObservations(demo).map(({ code, severity, path, relatedIds }) => ({ code, severity, path, relatedIds }))).toEqual([
-      { code: 'price.tax-unstated', severity: 'warning', path: 'prices[8]', relatedIds: ['demo-price-d-tax-unknown'] },
-      { code: 'price.shipping-unstated', severity: 'warning', path: 'prices[9]', relatedIds: ['demo-price-d-shipping-unknown'] },
-      { code: 'price.amount-missing', severity: 'warning', path: 'prices[13]', relatedIds: ['demo-price-f-missing'] },
-    ]);
+    const issues = validatePriceObservations(demo);
+    expect(issues.every((i) => i.severity === 'warning')).toBe(true);
+    const byCode = new Map<string, string[]>();
+    for (const i of issues) byCode.set(i.code, [...(byCode.get(i.code) ?? []), ...i.relatedIds]);
+    expect(byCode.get('price.tax-unstated')).toEqual(['demo-price-d-tax-unknown']);
+    expect(byCode.get('price.amount-missing')).toEqual(['demo-price-f-missing']);
+    expect([...(byCode.get('price.shipping-unstated') ?? [])].sort()).toEqual(
+      ['demo-price-a-list', 'demo-price-c-list', 'demo-price-d-shipping-unknown', 'demo-price-e-list', 'demo-price-f-list'],
+    );
+    expect(byCode.size).toBe(3);
+  });
+
+  it('requires a non-blank rate method and bounds UTC offsets', () => {
+    expect(errors(withRate({ method: '   ' }))).toEqual(['rate.method-empty']);
+    expect(errors(withRate({ method: '' }))).toEqual(['rate.method-empty']);
+    expect(errors(withPrice({ observedAt: '2026-11-08T09:00:00+14:00' }))).toEqual([]);
+    expect(errors(withPrice({ observedAt: '2026-11-08T09:00:00+14:01' }))).toEqual(['price.observed-at-invalid']);
+    expect(errors(withPrice({ observedAt: '2026-11-08T09:00:00-00:00' }))).toEqual(['price.observed-at-invalid']);
+    expect(errors(withPrice({ observedAt: '2026-11-08T24:00:00Z' }))).toEqual(['price.observed-at-invalid']);
+    expect(errors(withPrice({ observedAt: '2026-11-08T23:60:00Z' }))).toEqual(['price.observed-at-invalid']);
+    expect(errors(withPrice({ observedAt: '2024-02-29T00:00:00Z' }))).toEqual([]);
+    expect(errors(withPrice({ observedAt: '2026-02-29T00:00:00Z' }))).toEqual(['price.observed-at-invalid']);
   });
 
   it('labels all demo records fictional and uses manufacturer list sources only where available', () => {
@@ -140,8 +157,8 @@ describe('price validation contract', () => {
     const before = JSON.stringify(input);
     freeze(input);
     const issues = validatePriceObservations(input);
+    // Conditions of an unobservable price are not reported; only the missing amount is.
     expect(issues.map(({ code, path, relatedIds }) => [code, path, relatedIds])).toEqual([
-      ['price.tax-unstated', 'prices[0]', [price.id]], ['price.shipping-unstated', 'prices[0]', [price.id]],
       ['price.amount-missing', 'prices[0]', [price.id]], ['price.version-invalid', 'prices[1]', ['second']],
       ['rate.value-invalid', 'rates[0]', [rate.id]], ['price.product-without-prices', 'products[1]', ['empty']],
     ]);

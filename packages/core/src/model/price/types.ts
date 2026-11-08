@@ -70,4 +70,9 @@ export interface ConvertedPrice extends DerivedValue<number | null> {
   readonly currency: Currency;
   readonly observationId: string;
   readonly rateId: string | null;
+  /**
+   * `value` is the unrounded converted amount (aggregation uses it).
+   * `display` is rounded half-up to the currency's minor unit (JPY 0, others 2) for presentation only.
+   */
+  readonly display: number | null;
 }

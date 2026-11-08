@@ -63,10 +63,11 @@ describe('condition-specific price summaries', () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ key: { currency: 'JPY' }, observationIds: ['jpy', 'usd'], count: 2, min: 100, median: 200, max: 300 });
     const steps = result[0]!.steps;
-    expect(steps.map((step) => step.op)).toEqual(['select-measurement', 'unit-convert', 'unit-convert', 'normalize']);
+    // Identity conversions are not listed; only the USD conversion and the aggregation are.
+    expect(steps.map((step) => step.op)).toEqual(['select-measurement', 'unit-convert', 'aggregate']);
     expect(steps[0]).toMatchObject({ input: prices, output: ['jpy', 'usd'] });
-    expect(steps[2]).toMatchObject({ input: { observationId: 'usd', value: 2, currency: 'USD', rate }, output: { value: 300, currency: 'JPY' } });
-    for (const text of ['150', rate.rateDate, rate.method, rate.sourceId]) expect(steps[2]!.note).toContain(text);
+    expect(steps[1]).toMatchObject({ input: { observationId: 'usd', value: 2, currency: 'USD', rate }, output: { value: 300, currency: 'JPY' } });
+    for (const text of ['150', rate.rateDate, rate.method, rate.sourceId]) expect(steps[1]!.note).toContain(text);
     expect(steps.at(-1)).toMatchObject({ input: { methodologyVersion: 'price-summary-v1', observationIds: ['jpy', 'usd'], values: [100, 300] }, output: { count: 2, min: 100, median: 200, max: 300 } });
   });
   it('keeps USD in its own currency group without a usable directed rate', () => {
@@ -81,9 +82,11 @@ describe('condition-specific price summaries', () => {
     expect(summarizePrices('a', prices, 'JPY', [rate])[0]).toMatchObject({ key: { currency: 'JPY' }, excludedIds: ['null', 'zero'], count: 0 });
     expect(summarizePrices('a', prices, 'JPY')[0]).toMatchObject({ key: { currency: 'USD' }, excludedIds: ['null', 'zero'], count: 0 });
   });
-  it('retains a positive original observation even when currency rounding produces zero', () => {
-    const result = summarizePrices('a', [observation('small', 0.001, { currency: 'USD' })], 'JPY', [rate]);
-    expect(result[0]).toMatchObject({ observationIds: ['small'], excludedIds: [], count: 1, min: 0, median: 0, max: 0 });
+  it('aggregates unrounded values, so a tiny positive price never becomes 0', () => {
+    const result = summarizePrices('a', [observation('small', 0.001, { currency: 'USD' }), observation('small2', 0.001, { currency: 'USD' })], 'JPY', [rate]);
+    expect(result[0]).toMatchObject({ observationIds: ['small', 'small2'], excludedIds: [], count: 2 });
+    expect(result[0]!.min).toBeCloseTo(0.15, 12);
+    expect(result[0]!.median).toBeCloseTo(0.15, 12);
     expect(result[0]!.steps[1]!.note).toContain('0桁');
   });
   it('uses only the requested product and returns no groups for an absent product', () => {
@@ -98,15 +101,17 @@ describe('condition-specific price summaries', () => {
     ];
     expect(summarizePrices('a', prices, 'JPY')[0]).toMatchObject({ earliestObservedAt: '2026-11-08T09:00:00+09:00', latestObservedAt: '2026-11-08T00:30:00Z' });
   });
-  it('documents grouping caveats without silently normalizing coupons, locale, merchants or dates', () => {
+  it('never aggregates across markets; merchants, coupons and dates merged within a group are named in the lineage', () => {
     const prices = [observation('first', 100), observation('second', 200, {
-      merchant: '架空の別店舗', observedAt: '2026-11-10T09:00:00+09:00', ...conditions({ locale: 'US', couponApplied: '架空クーポン' }),
-    })];
+      merchant: '架空の別店舗', observedAt: '2026-11-10T09:00:00+09:00', ...conditions({ couponApplied: '架空クーポン' }),
+    }), observation('us', 300, conditions({ locale: 'US' }))];
     const result = summarizePrices('a', prices, 'JPY');
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
+    expect(result.map((g) => [g.key.locale, g.count])).toEqual([['JP', 2], ['US', 1]]);
     expect(result[0]).toMatchObject({ count: 2, median: 150 });
-    expect(result[0]!.steps[0]!.input).toEqual(prices);
-    for (const text of ['販売店', '地域', 'クーポン', '観測日時', '補正していません', '未記録']) expect(result[0]!.steps.at(-1)!.note).toContain(text);
+    const note = result[0]!.steps.at(-1)!.note;
+    expect(result[0]!.steps.at(-1)!.op).toBe('aggregate');
+    for (const text of ['販売店', '架空の別店舗', 'クーポン 1 件', '観測日 2026-11-08T09:00:00+09:00〜2026-11-10T09:00:00+09:00', '未丸め']) expect(note).toContain(text);
   });
   it('sorts by key tuple, then ids, deterministically without mutating frozen inputs', () => {
     const prices = [
