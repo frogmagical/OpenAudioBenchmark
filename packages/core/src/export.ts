@@ -26,8 +26,7 @@ export const CATALOG_CSV_HEADER: readonly string[] = [
  * cells become empty strings. Non-string cells are stringified with `String()`.
  */
 export function toCsv(rows: readonly (readonly (string | number | null | undefined)[])[]): string {
-  void rows;
-  throw new Error('not implemented');
+  return rows.map(row => row.map(cell => '"' + String(cell ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
 }
 
 /**
@@ -38,10 +37,15 @@ export function toCsv(rows: readonly (readonly (string | number | null | undefin
  * verified ? 'あり' : 'なし', features.join('|').
  */
 export function buildCatalogCsv(products: readonly DemoProduct[], weights: Weights): string {
-  void products;
-  void weights;
-  void calculateUtility;
-  throw new Error('not implemented');
+  const rows = products.map(product => {
+    const result = calculateUtility(product, weights);
+    return [
+      product.name, product.price, product.power, product.thdn, product.snr,
+      result.status === 'scored' && result.score !== null ? result.score.toFixed(2) : '',
+      Math.round(result.coverage * 100), product.verified ? 'あり' : 'なし', product.features.join('|'),
+    ];
+  });
+  return '\ufeff' + toCsv([CATALOG_CSV_HEADER, ...rows]);
 }
 
 /**
@@ -55,10 +59,12 @@ export function buildCatalogJson(
   weights: Weights,
   options: { readonly date: string },
 ): string {
-  void products;
-  void weights;
-  void options;
-  void FICTIONAL_DATA_NOTICE;
-  void METHODOLOGY_VERSION;
-  throw new Error('not implemented');
+  return JSON.stringify({
+    notice: FICTIONAL_DATA_NOTICE,
+    version: '0.1.0',
+    methodologyVersion: METHODOLOGY_VERSION,
+    date: options.date,
+    weights,
+    products: products.map(product => ({ ...product, computed: calculateUtility(product, weights) })),
+  }, null, 2);
 }

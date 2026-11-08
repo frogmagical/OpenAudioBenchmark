@@ -24,17 +24,18 @@ import type { DemoProduct, MetricKey, NormalizationBounds, UtilityResult, Weight
  * - Never returns NaN or ±Infinity.
  */
 export function normalize(value: number | null, bounds: NormalizationBounds): number | null {
-  void value;
-  void bounds;
-  throw new Error('not implemented');
+  if (value === null || !Number.isFinite(value) || value < 0) return null;
+  if (!Number.isFinite(bounds.min) || !Number.isFinite(bounds.max) || bounds.max <= bounds.min) return null;
+  if (bounds.scale === 'log10' && value <= 0) return null;
+  const scaled = bounds.scale === 'log10' ? Math.log10(value) : value;
+  const position = Math.max(0, Math.min(1, (scaled - bounds.min) / (bounds.max - bounds.min)));
+  const score = 100 * (bounds.invert ? 1 - position : position);
+  return Number.isFinite(score) ? score : null;
 }
 
 /** Normalised 0–100 score of one metric of a product, or `null` when missing. Uses `METRIC_BOUNDS`. */
 export function metricScore(product: DemoProduct, key: MetricKey): number | null {
-  void product;
-  void key;
-  void METRIC_BOUNDS;
-  throw new Error('not implemented');
+  return normalize(product[key], METRIC_BOUNDS[key]);
 }
 
 /**
@@ -48,12 +49,27 @@ export function metricScore(product: DemoProduct, key: MetricKey): number | null
  *   (exactly 70 % coverage is `scored`; anything below is `pending`).
  */
 export function calculateUtility(product: DemoProduct, weights: Weights): UtilityResult {
-  void product;
-  void weights;
-  void COVERAGE_THRESHOLD;
-  void METHODOLOGY_VERSION;
-  void METRIC_KEYS;
-  throw new Error('not implemented');
+  const metricScores: Record<MetricKey, number | null> = { price: null, power: null, thdn: null, snr: null };
+  let totalWeight = 0;
+  let usedWeight = 0;
+  let weightedSum = 0;
+  for (const key of METRIC_KEYS) {
+    const weight = validWeight(weights[key]);
+    const normalized = metricScore(product, key);
+    metricScores[key] = normalized;
+    totalWeight += weight;
+    if (normalized !== null) {
+      usedWeight += weight;
+      weightedSum += weight * normalized;
+    }
+  }
+  const coverage = totalWeight > 0 ? usedWeight / totalWeight : 0;
+  const score = usedWeight > 0 ? weightedSum / usedWeight : null;
+  return {
+    score, coverage, metricScores, usedWeight, totalWeight,
+    status: score !== null && coverage >= COVERAGE_THRESHOLD ? 'scored' : 'pending',
+    methodologyVersion: METHODOLOGY_VERSION,
+  };
 }
 
 /**
@@ -62,6 +78,14 @@ export function calculateUtility(product: DemoProduct, weights: Weights): Utilit
  * weights count as 0, consistent with `calculateUtility`.
  */
 export function weightPercentages(weights: Weights): Record<MetricKey, number> {
-  void weights;
-  throw new Error('not implemented');
+  const total = METRIC_KEYS.reduce((sum, key) => sum + validWeight(weights[key]), 0);
+  const percentages: Record<MetricKey, number> = { price: 0, power: 0, thdn: 0, snr: 0 };
+  for (const key of METRIC_KEYS) {
+    percentages[key] = total > 0 ? Math.round(validWeight(weights[key]) / total * 100) : 0;
+  }
+  return percentages;
+}
+
+function validWeight(weight: number): number {
+  return Number.isFinite(weight) && weight >= 0 ? weight : 0;
 }

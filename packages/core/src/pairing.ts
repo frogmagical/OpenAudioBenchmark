@@ -28,9 +28,10 @@ import type { DemoAmp, DemoSpeaker, PairingInput, PairingResult, PairingVerdict,
  * Throws `RangeError` when `nominalOhms` is not a finite positive number.
  */
 export function sensitivityAt1W(spec: SensitivitySpec, nominalOhms: number): number {
-  void spec;
-  void nominalOhms;
-  throw new Error('not implemented');
+  if (!Number.isFinite(nominalOhms) || nominalOhms <= 0) {
+    throw new RangeError('nominalOhms must be finite and positive');
+  }
+  return spec.reference === '1W/1m' ? spec.valueDb : spec.valueDb - 10 * Math.log10(8 / nominalOhms);
 }
 
 /**
@@ -38,9 +39,8 @@ export function sensitivityAt1W(spec: SensitivitySpec, nominalOhms: number): num
  * Pure formula; does not validate ranges (see `validatePairingInput`).
  */
 export function requiredPowerW(sensitivityAt1WDb: number, input: PairingInput): number {
-  void sensitivityAt1WDb;
-  void input;
-  throw new Error('not implemented');
+  return 10 ** ((input.targetPeakSpl + input.safetyMarginDb - sensitivityAt1WDb +
+    20 * Math.log10(input.distanceM) - input.stereoGainDb) / 10);
 }
 
 /**
@@ -49,16 +49,15 @@ export function requiredPowerW(sensitivityAt1WDb: number, input: PairingInput): 
  * A non-finite or non-positive published figure is also returned as `null`.
  */
 export function availablePowerForLoad(amp: DemoAmp, nominalOhms: number): number | null {
-  void amp;
-  void nominalOhms;
-  throw new Error('not implemented');
+  const power = nominalOhms === 8 ? amp.powerAt8Ohms : nominalOhms === 4 ? amp.powerAt4Ohms : null;
+  return power !== null && Number.isFinite(power) && power > 0 ? power : null;
 }
 
 /** `10·log10(available / required)`; `null` when `available` is null. Never NaN. */
 export function headroomDb(availableW: number | null, requiredW: number): number | null {
-  void availableW;
-  void requiredW;
-  throw new Error('not implemented');
+  if (availableW === null || !Number.isFinite(availableW) || availableW <= 0 ||
+    !Number.isFinite(requiredW) || requiredW <= 0) return null;
+  return 10 * Math.log10(availableW / requiredW);
 }
 
 /**
@@ -67,10 +66,9 @@ export function headroomDb(availableW: number | null, requiredW: number): number
  * Boundaries are inclusive on the upper category (exactly 3 dB is positive, exactly 0 dB is neutral).
  */
 export function classifyHeadroom(headroom: number | null): PairingVerdict {
-  void headroom;
-  void HEADROOM_POSITIVE_DB;
-  void HEADROOM_NEUTRAL_DB;
-  throw new Error('not implemented');
+  if (headroom === null) return 'pending';
+  if (headroom >= HEADROOM_POSITIVE_DB) return 'positive';
+  return headroom >= HEADROOM_NEUTRAL_DB ? 'neutral' : 'negative';
 }
 
 /**
@@ -80,10 +78,18 @@ export function classifyHeadroom(headroom: number | null): PairingVerdict {
  * - `stereo-gain-invalid`, `safety-margin-invalid` (non-finite)
  */
 export function validatePairingInput(input: PairingInput): string[] {
-  void input;
-  void DISTANCE_RANGE_M;
-  void PEAK_SPL_RANGE_DB;
-  throw new Error('not implemented');
+  const problems: string[] = [];
+  if (!Number.isFinite(input.distanceM)) problems.push('distance-invalid');
+  else if (input.distanceM < DISTANCE_RANGE_M.min || input.distanceM > DISTANCE_RANGE_M.max) {
+    problems.push('distance-out-of-range');
+  }
+  if (!Number.isFinite(input.targetPeakSpl)) problems.push('peak-invalid');
+  else if (input.targetPeakSpl < PEAK_SPL_RANGE_DB.min || input.targetPeakSpl > PEAK_SPL_RANGE_DB.max) {
+    problems.push('peak-out-of-range');
+  }
+  if (!Number.isFinite(input.stereoGainDb)) problems.push('stereo-gain-invalid');
+  if (!Number.isFinite(input.safetyMarginDb)) problems.push('safety-margin-invalid');
+  return problems;
 }
 
 /**
@@ -93,9 +99,24 @@ export function validatePairingInput(input: PairingInput): string[] {
  * `methodologyVersion = METHODOLOGY_VERSION`.
  */
 export function evaluatePairing(amp: DemoAmp, speaker: DemoSpeaker, input: PairingInput): PairingResult {
-  void amp;
-  void speaker;
-  void input;
-  void METHODOLOGY_VERSION;
-  throw new Error('not implemented');
+  const problems = validatePairingInput(input);
+  if (problems.length > 0) return { ok: false, error: 'invalid-input', problems };
+  const sensitivityAt1WDb = sensitivityAt1W(speaker.sensitivity, speaker.nominalOhms);
+  const required = requiredPowerW(sensitivityAt1WDb, input);
+  const available = availablePowerForLoad(amp, speaker.nominalOhms);
+  const headroom = headroomDb(available, required);
+  return {
+    ok: true,
+    sensitivityAt1WDb,
+    requiredPowerW: required,
+    availablePowerW: available,
+    headroomDb: headroom,
+    outputVerdict: classifyHeadroom(headroom),
+    loadVerdict: 'pending',
+    bandVerdict: 'pending',
+    inputs: { ...input },
+    ampId: amp.id,
+    speakerId: speaker.id,
+    methodologyVersion: METHODOLOGY_VERSION,
+  };
 }

@@ -9,7 +9,16 @@ import type { ConditionComparison, MeasurementConditions } from './types.ts';
  * sides are ignored. `mismatches` is sorted alphabetically for stable output.
  */
 export function compareConditions(a: MeasurementConditions, b: MeasurementConditions): ConditionComparison {
-  void a;
-  void b;
-  throw new Error('not implemented');
+  const keys: readonly (keyof MeasurementConditions)[] = [
+    'bandwidthHz', 'channelsDriven', 'loadOhms', 'method', 'outputLevel', 'weighting',
+  ];
+  const mismatches = keys.filter(key => {
+    const left = a[key];
+    const right = b[key];
+    if (Array.isArray(left) && Array.isArray(right)) {
+      return left.length !== right.length || left.some((value, index) => value !== right[index]);
+    }
+    return left !== right;
+  });
+  return { compatible: mismatches.length === 0, mismatches };
 }

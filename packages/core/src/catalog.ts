@@ -13,9 +13,13 @@ import type { CatalogFilter, DemoProduct, Weights } from './types.ts';
  * Returns a new array; input order is preserved.
  */
 export function filterProducts(products: readonly DemoProduct[], filter: CatalogFilter): DemoProduct[] {
-  void products;
-  void filter;
-  throw new Error('not implemented');
+  const budget = filter.budgetMax;
+  const limited = budget != null && Number.isFinite(budget);
+  return products.filter(product =>
+    (!limited || (product.price !== null && product.price <= budget)) &&
+    (filter.requiredFeatures ?? []).every(feature => product.features.includes(feature)) &&
+    (!filter.verifiedOnly || product.verified),
+  );
 }
 
 /**
@@ -24,9 +28,11 @@ export function filterProducts(products: readonly DemoProduct[], filter: Catalog
  * 2. within a group, descending `score`, with a `null` score treated as -1.
  */
 export function rankProducts(products: readonly DemoProduct[], weights: Weights): DemoProduct[] {
-  void products;
-  void weights;
-  void calculateUtility;
-  void COVERAGE_THRESHOLD;
-  throw new Error('not implemented');
+  return products
+    .map(product => ({ product, result: calculateUtility(product, weights) }))
+    .sort((a, b) => {
+      const group = Number(a.result.coverage < COVERAGE_THRESHOLD) - Number(b.result.coverage < COVERAGE_THRESHOLD);
+      return group || (b.result.score ?? -1) - (a.result.score ?? -1);
+    })
+    .map(({ product }) => product);
 }
