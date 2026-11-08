@@ -7,3 +7,13 @@
 - Sonic 'synergy' must not be inferred from amplifier brand adjectives, subjective 'bass ability' or unsupported assumptions.
 - Public measurement datasets and graphs require license review before copying.
 - Need later requirements for product revisions, uncertainty and pricing history. These are not Phase 1 blockers.
+
+## Notes from the Phase 1 independent reviews (2026-11-08)
+
+Recorded for the Phase 2 data-model work; none of these blocks Phase 1.
+
+- One `MeasurementConditions` record per product is attached to three physically different metrics. Power needs load/channels/bandwidth, S/N needs weighting and reference level, THD+N needs output level. The model must carry conditions per measurement (see `Measurement.conditions` in DATA_MODEL.md), not per product.
+- `DemoProduct.evidence` is product-level; which metric is independently measured versus manufacturer-stated is not representable yet. Evidence tier must move to the measurement.
+- `normalize` treats negative values as missing, which is right for the four demo metrics but wrong for metrics with negative native ranges (e.g. noise floor in dBV). Per-metric validity rules belong in the metric definition.
+- `MeasurementConditions.weighting` collapses to `string`; pairing `problems` are free strings. Tighten to literal unions once the vocabularies settle.
+- Ranking and export never consult `compareConditions`; with a single demo condition set this is moot, but real data needs a ranking path that reports condition warnings.

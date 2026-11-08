@@ -9,10 +9,28 @@ permissions:
   contents: read
 
 jobs:
-  baseline:
-    name: v0.4 baseline integrity
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify prototype/index.html is byte-identical to the approved v0.4
+
+      - name: Verify v0.4 baseline is byte-identical
         run: cd prototype && sha256sum -c SHA256SUMS.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          retention-days: 7

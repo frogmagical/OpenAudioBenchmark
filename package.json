@@ -1,0 +1,34 @@
+{
+  "name": "openaudiobenchmark",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open Audio Benchmark — evidence-first audio equipment comparison (Phase 1 workspace)",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @openaudiobenchmark/web",
+    "build": "npm run build -w @openaudiobenchmark/web",
+    "preview": "npm run preview -w @openaudiobenchmark/web",
+    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p apps/web/tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify:baseline": "cd prototype && sha256sum -c SHA256SUMS.txt"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.14.0",
+    "jsdom": "31.0.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1",
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
+  }
+}
