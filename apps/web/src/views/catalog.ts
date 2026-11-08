@@ -4,20 +4,23 @@
  * this module only renders and wires events.
  */
 import {
+  DEMO_DATASET,
   DEMO_PRODUCTS,
   FEATURE_LABELS,
   METRIC_KEYS,
   METRIC_LABELS,
+  STATUS_LABELS,
   WEIGHT_PRESETS,
   buildCatalogCsv,
   buildCatalogJson,
   calculateUtility,
   filterProducts,
   metricScore,
+  projectProduct,
   rankProducts,
   weightPercentages,
 } from '@openaudiobenchmark/core';
-import type { DemoProduct, FeatureKey, PresetKey, Weights } from '@openaudiobenchmark/core';
+import type { Dataset, DemoProduct, FeatureKey, PresetKey, Weights } from '@openaudiobenchmark/core';
 import { escapeHtml, qs, qsa } from '../dom.ts';
 import { download } from '../download.ts';
 import { fmt, fmtDb, fmtPercent, todayIso } from '../format.ts';
@@ -39,7 +42,29 @@ function isPresetKey(value: string): value is PresetKey {
   return Object.prototype.hasOwnProperty.call(WEIGHT_PRESETS, value);
 }
 
-export function initCatalog(products: readonly DemoProduct[] = DEMO_PRODUCTS): CatalogController {
+/**
+ * Per-metric provenance for the record details: evidence status, source and
+ * quality warnings, taken from the dataset projection (never from the score).
+ */
+function provenanceHtml(dataset: Dataset, productId: string): string {
+  if (!dataset.products.some((p) => p.id === productId)) return '';
+  const projection = projectProduct(dataset, productId);
+  const rows = METRIC_KEYS.map((k) => {
+    const m = projection.metrics[k];
+    const source = m.sourceId ? dataset.sources.find((s) => s.id === m.sourceId) : undefined;
+    const sourceText = source ? `${escapeHtml(source.id)}（${escapeHtml(source.publisher)}）` : '出典なし';
+    return `<li data-metric="${k}" data-status="${m.status}">${METRIC_LABELS[k]}：${STATUS_LABELS[m.status]} ／ ${sourceText}</li>`;
+  }).join('');
+  const warnings = projection.issues
+    .map((i) => `<li data-issue="${escapeHtml(i.code)}">${escapeHtml(i.message)}</li>`)
+    .join('');
+  return (
+    `<p style="margin-top:11px">指標ごとの証拠種別と出典</p><ul class="provenance">${rows}</ul>` +
+    (warnings ? `<p>データ品質の注意</p><ul class="quality-issues">${warnings}</ul>` : '')
+  );
+}
+
+export function initCatalog(products: readonly DemoProduct[] = DEMO_PRODUCTS, dataset: Dataset = DEMO_DATASET): CatalogController {
   let weights: Weights = { ...WEIGHT_PRESETS[DEFAULT_PRESET] };
   let selected: string[] = [];
 
@@ -112,6 +137,7 @@ export function initCatalog(products: readonly DemoProduct[] = DEMO_PRODUCTS): C
       `<button class="btn ${isSelected ? 'accent' : ''}" data-select="${escapeHtml(p.id)}">${isSelected ? '選択済み ✓' : '比較に追加'}</button></div>` +
       `<details class="details"><summary>根拠データと評価内訳を表示</summary><p>各指標の正規化値（100点満点）</p><ul>${breakdown}</ul>` +
       `<p style="margin-top:11px">出典・測定証跡：${p.sources.map(escapeHtml).join(' ／ ')}</p>` +
+      provenanceHtml(dataset, p.id) +
       `<p>※実データではありません。将来版では出典URL、測定日、測定条件、証拠種類、変更履歴を表示します。</p></details></article>`
     );
   };

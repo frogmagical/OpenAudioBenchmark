@@ -1,10 +1,14 @@
 /** Measurement-condition compatibility (Phase 1 minimal version). */
 import type { ConditionComparison, MeasurementConditions } from './types.ts';
 
-const CONDITION_KEYS: readonly (keyof MeasurementConditions)[] = [
+export const CONDITION_KEYS: readonly (keyof MeasurementConditions)[] = [
   'bandwidthHz',
   'channelsDriven',
+  'environment',
+  'frequencyHz',
+  'inputSignal',
   'loadOhms',
+  'loadType',
   'method',
   'outputLevel',
   'weighting',

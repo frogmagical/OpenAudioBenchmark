@@ -1,7 +1,7 @@
 /** Comparison view with synthetic fixtures: condition mismatch must withhold, not compare. */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DEMO_PRODUCTS, WEIGHT_PRESETS } from '@openaudiobenchmark/core';
-import type { DemoProduct } from '@openaudiobenchmark/core';
+import { DEMO_DATASET, DEMO_PRODUCTS, WEIGHT_PRESETS } from '@openaudiobenchmark/core';
+import type { Dataset, DemoProduct, Measurement } from '@openaudiobenchmark/core';
 import { WITHHELD_TEXT, renderCompare } from '../src/views/compare.ts';
 
 const a = DEMO_PRODUCTS[0]!;
@@ -19,12 +19,53 @@ beforeEach(() => {
 });
 
 describe('renderCompare', () => {
-  it('compares two products measured under the same conditions', () => {
+  it('compares two products measured under the same conditions and explains the caveats per metric', () => {
     renderCompare([a, b], WEIGHT_PRESETS.balanced);
     expect(document.querySelector('[data-condition-mismatch]')).toBeNull();
+    // Demo data: power is fully conditioned but unstated uncertainty is a caveat; THD+N and S/N lack required conditions → withheld.
+    const items = Array.from(document.querySelectorAll<HTMLElement>('[data-comparability] li'));
+    expect(items.map((li) => [li.dataset['metric'], li.dataset['level']])).toEqual([
+      ['power', 'comparable-with-caveats'],
+      ['thdn', 'not-comparable'],
+      ['snr', 'not-comparable'],
+    ]);
+    expect(items[1]!.textContent).toContain('outputLevel');
+    expect(cells('THD+N')).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
+    expect(cells('S/N')).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
+    expect(cells('参考適合度')).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
+    expect(cells('8Ω 出力/ch')).toEqual(['85W', '100W']);
+  });
+
+  it('shows every condition-dependent row when the measurements are fully conditioned and comparable', () => {
+    const full = { ...DEMO_DATASET.measurements[0]!.conditions, outputLevel: '1 W', weighting: 'A' as const };
+    const measurements: Measurement[] = DEMO_DATASET.measurements.map((m) => ({
+      ...m,
+      conditions: full,
+      uncertainty: m.value === null ? null : { type: 'relative', plusMinusPercent: 1 },
+    }));
+    const ds: Dataset = { ...DEMO_DATASET, measurements };
+    renderCompare([a, b], WEIGHT_PRESETS.balanced, ds);
+    expect(document.querySelector('[data-comparability]')).toBeNull();
     expect(cells('8Ω 出力/ch')).toEqual(['85W', '100W']);
     expect(cells('THD+N')).toEqual(['0.005%', '0.0015%']);
+    expect(cells('S/N')).toEqual(['105dB', '111dB']);
     expect(cells('参考適合度')[0]).toMatch(/^\d+\.\d\/100$/);
+  });
+
+  it('withholds only the metric whose measurements are incompatible, with the reason', () => {
+    const full = { ...DEMO_DATASET.measurements[0]!.conditions, outputLevel: '1 W', weighting: 'A' as const };
+    const measurements: Measurement[] = DEMO_DATASET.measurements.map((m) => ({
+      ...m,
+      conditions: m.id === 'm-b-power' ? { ...full, loadOhms: 4 } : full,
+      uncertainty: m.value === null ? null : { type: 'relative', plusMinusPercent: 1 },
+    }));
+    renderCompare([a, b], WEIGHT_PRESETS.balanced, { ...DEMO_DATASET, measurements });
+    expect(cells('8Ω 出力/ch')).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
+    expect(cells('THD+N')).toEqual(['0.005%', '0.0015%']);
+    expect(cells('参考適合度')).toEqual([WITHHELD_TEXT, WITHHELD_TEXT]);
+    const item = document.querySelector<HTMLElement>('[data-comparability] li[data-metric="power"]')!;
+    expect(item.dataset['level']).toBe('not-comparable');
+    expect(item.textContent).toContain('測定条件が一致しない');
   });
 
   it('withholds condition-dependent rows when measurement conditions differ', () => {

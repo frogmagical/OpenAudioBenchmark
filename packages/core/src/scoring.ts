@@ -10,7 +10,7 @@
  */
 import { COVERAGE_THRESHOLD, METHODOLOGY_VERSION, METRIC_BOUNDS } from './methodology.ts';
 import { METRIC_KEYS } from './types.ts';
-import type { DemoProduct, MetricKey, NormalizationBounds, UtilityResult, Weights } from './types.ts';
+import type { MetricKey, MetricValues, NormalizationBounds, UtilityResult, Weights } from './types.ts';
 
 /**
  * Map `value` onto 0–100 using fixed reference bounds.
@@ -33,13 +33,15 @@ export function normalize(value: number | null, bounds: NormalizationBounds): nu
   return Number.isFinite(score) ? score : null;
 }
 
-/** Normalised 0–100 score of one metric of a product, or `null` when missing. Uses `METRIC_BOUNDS`. */
-export function metricScore(product: DemoProduct, key: MetricKey): number | null {
-  return normalize(product[key], METRIC_BOUNDS[key]);
+/** Normalised 0–100 score of one metric, or `null` when missing. Uses `METRIC_BOUNDS`. */
+export function metricScore(values: MetricValues, key: MetricKey): number | null {
+  return normalize(values[key], METRIC_BOUNDS[key]);
 }
 
 /**
- * Weighted utility and coverage for a product.
+ * Weighted utility and coverage for one set of metric values (a product's
+ * projected measurements). The calculation knows nothing about provenance;
+ * selection, unit conversion and lineage happen in `model/project.ts`.
  *
  * - Weights that are non-finite or negative count as 0.
  * - `totalWeight` is the sum over all `METRIC_KEYS`; `usedWeight` only over metrics with a non-null score.
@@ -48,14 +50,14 @@ export function metricScore(product: DemoProduct, key: MetricKey): number | null
  * - `status = score !== null && coverage >= COVERAGE_THRESHOLD ? 'scored' : 'pending'`
  *   (exactly 70 % coverage is `scored`; anything below is `pending`).
  */
-export function calculateUtility(product: DemoProduct, weights: Weights): UtilityResult {
+export function calculateUtility(values: MetricValues, weights: Weights): UtilityResult {
   const metricScores: Record<MetricKey, number | null> = { price: null, power: null, thdn: null, snr: null };
   let totalWeight = 0;
   let usedWeight = 0;
   let weightedSum = 0;
   for (const key of METRIC_KEYS) {
     const weight = validWeight(weights[key]);
-    const normalized = metricScore(product, key);
+    const normalized = metricScore(values, key);
     metricScores[key] = normalized;
     totalWeight += weight;
     if (normalized !== null) {

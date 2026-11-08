@@ -127,6 +127,21 @@ describe('catalog', () => {
     expect(thd.textContent).not.toMatch(/\b0\b/);
   });
 
+  it('shows per-metric evidence status, source and data-quality warnings in the details', () => {
+    const e = records().find((r) => r.dataset['productId'] === 'e')!;
+    const rows = Array.from(e.querySelectorAll<HTMLElement>('.provenance li'));
+    expect(rows.map((r) => r.dataset['status'])).toEqual(['manufacturer', 'manufacturer', 'missing', 'manufacturer']);
+    expect(rows[2]!.textContent).toContain('未測定');
+    expect(rows[2]!.textContent).toContain('出典なし');
+    expect(rows[0]!.textContent).toContain('DEMO-MFG-005');
+    const a = records().find((r) => r.dataset['productId'] === 'a')!;
+    expect(a.querySelector('.provenance li[data-metric="power"]')!.textContent).toContain('第三者測定');
+    expect(a.querySelector('.provenance li[data-metric="price"]')!.textContent).toContain('メーカー公称');
+    const issues = Array.from(a.querySelectorAll<HTMLElement>('.quality-issues li')).map((li) => li.dataset['issue']);
+    expect(issues).toEqual(['measurement.required-condition-unrecorded', 'measurement.required-condition-unrecorded']);
+    expect(a.querySelector('.quality-issues')!.textContent).toContain('outputLevel');
+  });
+
   it('filters by budget, required features and third-party verification', () => {
     setValue('#budget', '30000');
     expect(recordNames()).toEqual(['Compact Amp E']);

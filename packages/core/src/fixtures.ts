@@ -9,123 +9,21 @@
  * Values are copied verbatim from `prototype/index.html` (v0.4) so that the
  * ported application reproduces the approved baseline behaviour.
  */
-import type {
-  DemoAmp,
-  DemoProduct,
-  DemoSpeaker,
-  FeatureKey,
-  MeasurementConditions,
-  MetricKey,
-  PresetKey,
-  Weights,
-} from './types.ts';
+import { DEMO_DATASET } from './model/demo-dataset.ts';
+import { toDemoProduct } from './model/adapter.ts';
+import type { DemoAmp, DemoProduct, DemoSpeaker, FeatureKey, MetricKey, PresetKey, Weights } from './types.ts';
 
 /** Label shown wherever demo data appears. */
 export const FICTIONAL_DATA_NOTICE = 'FICTIONAL DEMO DATA ONLY' as const;
 
-/**
- * The demo assumes all amplifier figures share one measurement condition set.
- * Real data must carry its own conditions; see docs/METHODOLOGY.md.
- */
-export const DEMO_CONDITIONS: MeasurementConditions = {
-  loadOhms: 8,
-  channelsDriven: 2,
-  bandwidthHz: [20, 20000],
-  method: 'demo-assumed-identical',
-};
+export { DEMO_CONDITIONS } from './model/demo-dataset.ts';
 
-export const DEMO_PRODUCTS: readonly DemoProduct[] = [
-  {
-    id: 'a',
-    name: 'Reference Amp A',
-    subtitle: 'バランス型の一体型アンプ',
-    price: 46000,
-    power: 85,
-    thdn: 0.005,
-    snr: 105,
-    features: ['hdmi', 'usb', 'bt', 'hp'],
-    verified: true,
-    sources: ['DEMO-LAB-001: 第三者測定（架空）', 'DEMO-MFG-001: メーカー仕様（架空）'],
-    evidence: 'observed',
-    conditions: DEMO_CONDITIONS,
-    fictional: true,
-  },
-  {
-    id: 'b',
-    name: 'Studio Amp B',
-    subtitle: '測定性能重視のシンプル設計',
-    price: 34000,
-    power: 100,
-    thdn: 0.0015,
-    snr: 111,
-    features: ['usb', 'hp'],
-    verified: true,
-    sources: ['DEMO-LAB-002: 第三者測定（架空）'],
-    evidence: 'observed',
-    conditions: DEMO_CONDITIONS,
-    fictional: true,
-  },
-  {
-    id: 'c',
-    name: 'Living Amp C',
-    subtitle: 'テレビ連携を重視した多機能機',
-    price: 32000,
-    power: 75,
-    thdn: 0.01,
-    snr: 98,
-    features: ['hdmi', 'usb', 'bt', 'hp', 'phono'],
-    verified: false,
-    sources: ['DEMO-MFG-003: メーカー公称（架空）'],
-    evidence: 'manufacturer',
-    conditions: DEMO_CONDITIONS,
-    fictional: true,
-  },
-  {
-    id: 'd',
-    name: 'Drive Amp D',
-    subtitle: '高出力に特化したアンプ',
-    price: 69000,
-    power: 155,
-    thdn: 0.002,
-    snr: 108,
-    features: ['usb', 'bt'],
-    verified: true,
-    sources: ['DEMO-LAB-004: 第三者測定（架空）'],
-    evidence: 'observed',
-    conditions: DEMO_CONDITIONS,
-    fictional: true,
-  },
-  {
-    id: 'e',
-    name: 'Compact Amp E',
-    subtitle: '低価格・省スペース設計',
-    price: 24000,
-    power: 40,
-    thdn: null,
-    snr: 92,
-    features: ['usb', 'bt'],
-    verified: false,
-    sources: ['DEMO-MFG-005: THD+N未公表（架空）'],
-    evidence: 'manufacturer',
-    conditions: DEMO_CONDITIONS,
-    fictional: true,
-  },
-  {
-    id: 'f',
-    name: 'Classic Amp F',
-    subtitle: 'アナログ入力中心の設計',
-    price: 54000,
-    power: 115,
-    thdn: 0.004,
-    snr: null,
-    features: ['hp', 'phono'],
-    verified: false,
-    sources: ['DEMO-MFG-006: S/N未公表（架空）'],
-    evidence: 'manufacturer',
-    conditions: DEMO_CONDITIONS,
-    fictional: true,
-  },
-];
+/**
+ * Product view consumed by the Phase 1 UI and scorer, projected from
+ * `DEMO_DATASET` (one measurement per metric with source and status).
+ * The literal values are pinned in `test/model/projection.test.ts`.
+ */
+export const DEMO_PRODUCTS: readonly DemoProduct[] = DEMO_DATASET.products.map((p) => toDemoProduct(DEMO_DATASET, p.id));
 
 /** Japanese labels for the four metrics, in display order. */
 export const METRIC_LABELS: Readonly<Record<MetricKey, string>> = {
