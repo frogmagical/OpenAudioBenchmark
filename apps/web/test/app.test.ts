@@ -440,10 +440,10 @@ describe('sources and evidence view', () => {
     expect(cells[3]).toBe('未記録');
     expect(cells[5]).toBe('2026-11-08');
     expect(cells[6]).toBe('未記録'); // licence
-    expect(cells[7]).toBe('3');
+    expect(cells[9]).toBe('3');
     expect(lab.querySelector('[data-issue="source.url-missing"]')).not.toBeNull();
     expect(document.querySelectorAll('#sourcesTable a')).toHaveLength(0);
-    expect(document.querySelectorAll('#sourcesTable thead th[scope="col"]')).toHaveLength(10);
+    expect(document.querySelectorAll('#sourcesTable thead th[scope="col"]')).toHaveLength(12);
   });
 
   it('shows per-metric value, evidence status, source, conditions, uncertainty and warnings for each product', () => {
@@ -557,6 +557,44 @@ describe('sources and evidence view', () => {
     expect(rows.find((r) => r.dataset['metric'] === 'minimumImpedance')!.dataset['status']).toBe('missing');
     // Amplifier metrics are not listed for a speaker, and the catalog still scores only the four amplifier metrics.
     expect(rows.some((r) => r.dataset['metric'] === 'power')).toBe(false);
+  });
+
+  it('shows value-less measurement references, range specifications and reuse status (schema 1.1)', () => {
+    const base = DEMO_DATASET.measurements[0]!;
+    const labSrc = DEMO_DATASET.sources[0]!;
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      products: [...DEMO_DATASET.products, { ...DEMO_DATASET.products[0]!, id: 'spk', name: 'Demo Speaker（架空）', category: 'speaker', features: [] }],
+      sources: [
+        ...DEMO_DATASET.sources,
+        { ...labSrc, id: 'EXT-LAB', publisher: 'External Lab（架空）', url: 'https://example.test/measurements', tier: 'primary', reuse: { ...labSrc.reuse, quoteFacts: 'unknown', reproduceFigures: 'unknown', storeRawData: 'unknown', redistribute: 'unknown', basis: null, checkedAt: null } },
+      ],
+      measurements: [
+        ...DEMO_DATASET.measurements,
+        { ...base, id: 'm-spk-znom', productId: 'spk', metric: 'nominalImpedance', value: 8, unit: 'Ω', conditions: {} },
+      ],
+      references: [
+        { id: 'ref-spk-sens', productId: 'spk', metric: 'sensitivity', sourceId: 'EXT-LAB', quantities: ['感度', 'インピーダンス振幅と位相'], conditions: { environment: 'anechoic', instrument: 'Demo NFS（架空）' }, status: 'observed', accessedAt: '2026-11-08', notes: null },
+      ],
+      ranges: [
+        { id: 'rng-spk-fr', productId: 'spk', metric: 'frequencyRange', lowHz: 47, highHz: 45000, toleranceDb: -6, toleranceKind: 'minus', status: 'manufacturer', sourceId: 'DEMO-MFG-001', conditions: {}, capturedAt: null, version: 1, notes: null },
+      ],
+    };
+    document.body.innerHTML = body;
+    initApp(prepareDataset(ds));
+    const ref = el<HTMLElement>('#evidenceTable tr[data-reference-id="ref-spk-sens"]');
+    expect(ref.textContent).toContain('出典で確認');
+    expect(ref.textContent).toContain('所在のみ');
+    expect(ref.textContent).not.toMatch(/\d+(\.\d+)? dB/);
+    expect(ref.querySelector('a')!.getAttribute('href')).toBe('https://example.test/measurements');
+    const rng = el<HTMLElement>('#evidenceTable tr[data-range-id="rng-spk-fr"]');
+    expect(rng.textContent).toContain('47–45000 Hz（-6 dB）');
+    const srcRow = el<HTMLElement>('#sourcesTable tr[data-source-id="EXT-LAB"]');
+    expect(srcRow.querySelector('[data-reuse]')!.getAttribute('data-reuse')).toBe('unknown');
+    expect(srcRow.textContent).toContain('未確認');
+    expect(el('#sourcesTable tr[data-source-id="DEMO-LAB-001"] [data-reuse]').textContent).toContain('引用可');
+    const header = el<HTMLElement>('#evidenceTable tbody[data-product-id="spk"] th');
+    expect(header.getAttribute('rowspan')).toBe(String(document.querySelectorAll('#evidenceTable tbody[data-product-id="spk"] tr').length));
   });
 
   it('escapes source and product text', () => {

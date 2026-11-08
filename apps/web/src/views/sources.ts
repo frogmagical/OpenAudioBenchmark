@@ -15,7 +15,7 @@ import {
   formatConditionValue,
   projectProduct,
 } from '@openaudiobenchmark/core';
-import type { MeasurementConditions, MeasurementStatus, MetricId, PreparedDataset, Product, Source, Uncertainty } from '@openaudiobenchmark/core';
+import type { MeasurementConditions, MeasurementStatus, MetricId, PreparedDataset, Product, ReusePermission, Source, Uncertainty } from '@openaudiobenchmark/core';
 import { escapeHtml, qs } from '../dom.ts';
 import { fmt } from '../format.ts';
 
@@ -29,6 +29,14 @@ const METRIC_NAMES: Readonly<Record<MetricId, string>> = {
   nominalImpedance: '公称インピーダンス',
   minimumImpedance: '最小インピーダンス',
   crossoverFrequency: 'クロスオーバー周波数',
+};
+
+export const REUSE_LABELS: Readonly<Record<ReusePermission, string>> = {
+  allowed: '引用可',
+  'allowed-with-attribution': '引用可（出典表示）',
+  'permitted-by-law-or-terms': '法令・規約で可',
+  unknown: '未確認',
+  prohibited: '不可',
 };
 
 /** Metrics that make sense for a product's category (schema 1.1, METRIC_CATEGORIES). */
@@ -105,12 +113,13 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
 
   const sourcesTable =
     `<h3 class="sources-heading">出典一覧<small>${dataset.sources.length} 件。URL・ライセンス・取得日を記録します。</small></h3>` +
-    `<div class="table-scroll"><table class="data-table" id="sourcesTable"><thead><tr><th scope="col" class="id">ID</th><th scope="col">種別</th><th scope="col">発行元</th><th scope="col">URL</th><th scope="col">公開日</th><th scope="col">取得日</th><th scope="col">ライセンス</th><th scope="col">参照数</th><th scope="col">備考</th><th scope="col">品質の注意</th></tr></thead><tbody>` +
+    `<div class="table-scroll"><table class="data-table" id="sourcesTable"><thead><tr><th scope="col" class="id">ID</th><th scope="col">種別</th><th scope="col">発行元</th><th scope="col">URL</th><th scope="col">公開日</th><th scope="col">取得日</th><th scope="col">ライセンス</th><th scope="col">区分</th><th scope="col">数値引用の許諾</th><th scope="col">参照数</th><th scope="col">備考</th><th scope="col">品質の注意</th></tr></thead><tbody>` +
     dataset.sources
       .map(
         (s) =>
           `<tr data-source-id="${escapeHtml(s.id)}"><td class="id">${escapeHtml(s.id)}</td><td>${SOURCE_KIND_LABELS[s.kind] ?? escapeHtml(s.kind)}</td><td>${escapeHtml(s.publisher)}</td><td>${link(s.url)}</td>` +
           `<td class="num">${s.publishedAt ? escapeHtml(s.publishedAt) : '未記録'}</td><td class="num">${escapeHtml(s.accessedAt)}</td><td>${s.license ? escapeHtml(s.license) : '未記録'}</td>` +
+          `<td>${s.tier === 'primary' ? '一次' : '二次'}</td><td data-reuse="${s.reuse.quoteFacts}">${REUSE_LABELS[s.reuse.quoteFacts]}${s.reuse.checkedAt ? `<br><span class="small">確認 ${escapeHtml(s.reuse.checkedAt)}</span>` : ''}</td>` +
           `<td class="num">${citations.get(s.id) ?? 0}</td><td>${s.notes ? escapeHtml(s.notes) : ''}</td>` +
           `<td>${sourceIssues(s.id)}</td></tr>`,
       )
@@ -151,7 +160,32 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
         `<td>${warnings ? `<ul class="issue-list">${warnings}</ul>` : '<span class="small">なし</span>'}</td></tr>`
       );
     });
-    return `<tbody data-product-id="${escapeHtml(p.id)}">${rows.join('')}</tbody>`;
+    // Value-less references (D-16 / G5): the figure exists at the source; we point to it and show nothing numeric.
+    const refRows = (dataset.references ?? [])
+      .filter((r) => r.productId === p.id)
+      .map((r) => {
+        const src = dataset.sources.find((x) => x.id === r.sourceId);
+        return (
+          `<tr data-product-id="${escapeHtml(p.id)}" data-reference-id="${escapeHtml(r.id)}" data-status="reference">` +
+          `<td>${METRIC_NAMES[r.metric]}</td><td class="num">出典で確認${src ? `<br>${link(src.url)}` : ''}</td>` +
+          `<td><span class="status-pill" data-status="${r.status}">${STATUS_LABELS[r.status]}</span><div class="small">所在のみ（数値は未保存）: ${r.quantities.map(escapeHtml).join('、')}</div></td>` +
+          `<td class="id">${escapeHtml(r.sourceId)}</td><td>${conditionsList(r.conditions)}</td><td>—</td><td><span class="small">数値の利用条件が未確認のため所在のみ</span></td></tr>`
+        );
+      });
+    // Range specifications (D-07): kept as one record with tolerance and conditions.
+    const rangeRows = (dataset.ranges ?? [])
+      .filter((r) => r.productId === p.id)
+      .map(
+        (r) =>
+          `<tr data-product-id="${escapeHtml(p.id)}" data-range-id="${escapeHtml(r.id)}" data-status="${r.status}">` +
+          `<td>周波数範囲</td><td class="num">${r.lowHz}–${r.highHz} Hz（${r.toleranceKind === 'minus' ? `${r.toleranceDb} dB` : `±${r.toleranceDb} dB`}）</td>` +
+          `<td>${pill(r.status)}<div class="small">版 ${r.version}${r.capturedAt ? ` ／ 測定日 ${escapeHtml(r.capturedAt)}` : ''}</div></td>` +
+          `<td class="id">${escapeHtml(r.sourceId)}</td><td>${conditionsList(r.conditions)}</td><td>—</td><td><span class="small">なし</span></td></tr>`,
+      );
+    const allRows = [...rows, ...refRows, ...rangeRows];
+    // The product header spans every row of this product.
+    allRows[0] = allRows[0]!.replace(`rowspan="${metricList.length}"`, `rowspan="${allRows.length}"`);
+    return `<tbody data-product-id="${escapeHtml(p.id)}">${allRows.join('')}</tbody>`;
   });
   const evidenceTable =
     `<h3 class="sources-heading">製品別の測定根拠<small>指標ごとに値・証拠種別・出典・測定条件・不確かさ・品質の注意を示します。</small></h3>` +
