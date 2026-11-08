@@ -35,8 +35,10 @@ function isUsable(m: Measurement, prepared: PreparedDataset): boolean {
  * Pick the measurement to use for one metric: best evidence status first
  * (observed > manufacturer > estimated), then the highest `version`, then the
  * most recent `capturedAt`, then id for determinism. `null` when none is usable.
+ * With a prepared dataset the gate is asserted first (an unusable dataset selects nothing).
  */
 export function selectMeasurement(candidates: readonly Measurement[], prepared?: PreparedDataset): Measurement | null {
+  if (prepared) assertUsable(prepared);
   const usable = prepared ? candidates.filter((m) => isUsable(m, prepared)) : candidates.filter((m) => m.status !== 'missing' && m.value !== null && Number.isFinite(m.value));
   if (usable.length === 0) return null;
   return [...usable].sort(

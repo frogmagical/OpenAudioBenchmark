@@ -7,10 +7,11 @@ import * as scoring from '../../src/scoring.ts';
 import type { MeasurementConditions, MetricKey } from '../../src/types.ts';
 import { METRIC_KEYS } from '../../src/types.ts';
 import { explainComparability } from '../../src/model/comparability.ts';
-import { toDemoProduct } from '../../src/model/adapter.ts';
+import { sourcesForProduct, toDemoProduct } from '../../src/model/adapter.ts';
+import { prepareDataset } from '../../src/model/prepare.ts';
 import { DEMO_CONDITIONS, DEMO_DATASET } from '../../src/model/demo-dataset.ts';
 import { evaluateProduct } from '../../src/model/evaluate.ts';
-import { projectMetric, projectProduct, toMetricValues } from '../../src/model/project.ts';
+import { projectMetric, projectProduct, selectMeasurement, toMetricValues } from '../../src/model/project.ts';
 import {
   COMPARISON_REQUIRED_CONDITIONS, CONDITION_LABELS, METRIC_CATEGORIES, METRIC_UNITS,
   RELEVANT_CONDITIONS, REQUIRED_CONDITIONS, VALUE_DOMAIN, formatConditionValue, unrecordedRequiredConditions,
@@ -529,6 +530,10 @@ describe('runtime shape guards (final audit: status vocabulary, condition types,
     { name: 'three-element band', key: 'bandwidthHz', conditions: { bandwidthHz: [20, 200, 20000] } },
     { name: 'string band bounds', key: 'averagingBandHz', conditions: { averagingBandHz: ['300', '3000'] } },
     { name: 'unknown key', key: 'temperatureC', conditions: { temperatureC: 20 } },
+    // Keys that exist on Object.prototype must be ordinary unknown keys, never a lookup that crashes (re-audit finding).
+    ...['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf'].map((key) => ({
+      name: `prototype-named key ${key}`, key, conditions: JSON.parse(`{${JSON.stringify(key)}: "x"}`) as Record<string, unknown>,
+    })),
   ];
   it.each(malformed)('$name is a condition problem for every record type and never throws', ({ key, conditions }) => {
     const c = conditions as MeasurementConditions;
@@ -569,6 +574,17 @@ describe('runtime shape guards (final audit: status vocabulary, condition types,
       expect(() => validateDataset(ds)).not.toThrow();
       expect(errors(ds)).toContainEqual(expect.objectContaining({ code: 'measurement.condition-value-invalid', relatedIds: ['bad'] }));
     }
+  });
+
+  it('public core helpers refuse an unusable dataset', () => {
+    const wrongVersion = { ...DEMO_DATASET, schemaVersion: '0.9' } as unknown as Dataset;
+    const unusable = prepareDataset(wrongVersion);
+    expect(unusable.usable).toBe(false);
+    expect(sourcesForProduct(DEMO_DATASET, 'a').length).toBeGreaterThan(0);
+    expect(() => sourcesForProduct(wrongVersion, 'a')).toThrow(/dataset\.schema-version/);
+    expect(() => sourcesForProduct(unusable, 'a')).toThrow(/dataset\.schema-version/);
+    expect(selectMeasurement(DEMO_DATASET.measurements)).not.toBeNull();
+    expect(() => selectMeasurement(DEMO_DATASET.measurements, unusable)).toThrow(/dataset\.schema-version/);
   });
 
   it('the JSON export refuses an unusable dataset instead of exporting anything from it', () => {

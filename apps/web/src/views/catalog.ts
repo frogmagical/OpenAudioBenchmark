@@ -8,6 +8,7 @@ import {
   METRIC_KEYS,
   METRIC_LABELS,
   PREPARED_DEMO_DATASET,
+  assertUsable,
   STATUS_LABELS,
   WEIGHT_PRESETS,
   isScoringMetric,
@@ -81,6 +82,7 @@ function provenanceHtml(prepared: PreparedDataset, productId: string): string {
  * its measurements, so displayed numbers, scores and provenance share one lineage.
  */
 export function initCatalog(prepared: PreparedDataset = PREPARED_DEMO_DATASET): CatalogController {
+  assertUsable(prepared); // the gate holds even for a dataset with no products
   const products: readonly DemoProduct[] = prepared.dataset.products.map((p) => toDemoProduct(prepared, p.id));
   let weights: Weights = { ...WEIGHT_PRESETS[DEFAULT_PRESET] };
   let selected: string[] = [];

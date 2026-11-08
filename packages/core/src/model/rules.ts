@@ -128,7 +128,8 @@ export function conditionValueProblem(key: string, value: unknown): string | nul
     if (typeof value !== 'string') return `${key} は文字列`;
     return value.trim() === '' ? `${key} が空文字` : null;
   }
-  const vocabulary = CONDITION_VOCABULARY[key as keyof MeasurementConditions];
+  // Own-property lookup only: JSON can carry keys such as `constructor` or `__proto__`, which must be unknown keys, not a crash.
+  const vocabulary = Object.hasOwn(CONDITION_VOCABULARY, key) ? CONDITION_VOCABULARY[key as keyof MeasurementConditions] : undefined;
   if (vocabulary) return typeof value === 'string' && vocabulary.includes(value) ? null : `${key} は ${vocabulary.join(' | ')} のいずれか`;
   if (POSITIVE_CONDITIONS.includes(key)) return typeof value === 'number' && Number.isFinite(value) && value > 0 ? null : `${key} は正の有限値`;
   if (key === 'channelsDriven') return typeof value === 'number' && Number.isInteger(value) && value > 0 ? null : 'channelsDriven は正の整数';

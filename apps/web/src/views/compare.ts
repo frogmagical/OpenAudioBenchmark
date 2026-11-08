@@ -7,6 +7,7 @@ import {
   FEATURE_LABELS,
   METRIC_LABELS,
   PREPARED_DEMO_DATASET,
+  assertUsable,
   STATUS_LABELS,
   calculateUtility,
   explainMetricComparability,
@@ -33,6 +34,7 @@ export function renderCompare(
   weights: Weights,
   prepared: PreparedDataset = PREPARED_DEMO_DATASET,
 ): void {
+  assertUsable(prepared); // before the empty-selection early return, so an unusable dataset never reaches the DOM
   const target = qs('#comparison');
   const ids = productIds.filter((id) => prepared.dataset.products.some((p) => p.id === id)).slice(0, 2);
   if (ids.length === 0) {

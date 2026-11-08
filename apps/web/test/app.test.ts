@@ -4,13 +4,14 @@
  * what remains to be verified in a browser.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEMO_DATASET, METHODOLOGY_VERSION, prepareDataset } from '@openaudiobenchmark/core';
+import { DEMO_DATASET, METHODOLOGY_VERSION, WEIGHT_PRESETS, prepareDataset } from '@openaudiobenchmark/core';
 import type { Dataset, MeasurementReference, RangeMeasurement, ReusePermission } from '@openaudiobenchmark/core';
 import { initApp } from '../src/app.ts';
 import type { App } from '../src/app.ts';
 import { INVALID_INPUT_TEXT } from '../src/views/pairing.ts';
 import { KNOWN_LIMITS } from '../src/views/methodology.ts';
-import { NO_SELECTION_TEXT } from '../src/views/compare.ts';
+import { NO_SELECTION_TEXT, renderCompare } from '../src/views/compare.ts';
+import { initCatalog } from '../src/views/catalog.ts';
 import { renderSources, renderSourcesUnchecked } from '../src/views/sources.ts';
 import html from '../index.html?raw';
 
@@ -538,6 +539,18 @@ describe('sources and evidence view', () => {
     expect(pill.getAttribute('data-status')).toBe(hostile);
     expect(pill.textContent).toBe(hostile);
     expect(pill.children).toHaveLength(0);
+  });
+
+  it('the catalog and comparison views refuse an unusable dataset even on their empty paths', () => {
+    const unusable = prepareDataset({ ...DEMO_DATASET, schemaVersion: '0.9', products: [], measurements: [], references: [], ranges: [] } as unknown as Dataset);
+    expect(unusable.usable).toBe(false);
+    const records = el('#records').innerHTML;
+    const comparison = el('#comparison').innerHTML;
+    expect(() => initCatalog(unusable)).toThrow(/dataset\.schema-version/);
+    expect(() => renderCompare([], WEIGHT_PRESETS.balanced, unusable)).toThrow(/dataset\.schema-version/);
+    expect(() => renderCompare(['a', 'b'], WEIGHT_PRESETS.balanced, unusable)).toThrow(/dataset\.schema-version/);
+    expect(el('#records').innerHTML).toBe(records);
+    expect(el('#comparison').innerHTML).toBe(comparison);
   });
 
   it('rejects an invalid reuse permission at app startup even when there are no products', () => {
