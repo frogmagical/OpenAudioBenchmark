@@ -1,0 +1,330 @@
+/** Schema 1.1 contracts. All numbers and instruments below are fictional test data. */
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { CONDITION_KEYS } from '../../src/conditions.ts';
+import { METRIC_BOUNDS } from '../../src/methodology.ts';
+import * as scoring from '../../src/scoring.ts';
+import type { MeasurementConditions, MetricKey } from '../../src/types.ts';
+import { METRIC_KEYS } from '../../src/types.ts';
+import { explainComparability } from '../../src/model/comparability.ts';
+import { DEMO_DATASET } from '../../src/model/demo-dataset.ts';
+import { evaluateProduct } from '../../src/model/evaluate.ts';
+import { projectMetric, projectProduct, toMetricValues } from '../../src/model/project.ts';
+import {
+  COMPARISON_REQUIRED_CONDITIONS, CONDITION_LABELS, METRIC_CATEGORIES, METRIC_UNITS,
+  RELEVANT_CONDITIONS, REQUIRED_CONDITIONS, VALUE_DOMAIN, formatConditionValue,
+} from '../../src/model/rules.ts';
+import {
+  DATASET_SCHEMA_VERSION, METRIC_IDS, REUSE_UNCHECKED, SPEAKER_METRIC_IDS, isScoringMetric,
+} from '../../src/model/types.ts';
+import type {
+  Dataset, Measurement, MeasurementReference, Product, RangeMeasurement, ReusePermission, SourceReuse,
+} from '../../src/model/types.ts';
+import { validateDataset } from '../../src/model/validate.ts';
+
+const base = DEMO_DATASET.measurements[0]!;
+const speaker: Product = {
+  ...DEMO_DATASET.products[0]!, id: 'schema11-speaker', category: 'speaker',
+  name: 'Schema 1.1 speaker（架空）', model: 'Fictional speaker', features: [],
+  region: 'JP', dimensionsMm: { w: 200, h: 300, d: 250 }, massKg: 7,
+};
+const speakerConditions: MeasurementConditions = {
+  sensitivityReference: '2.83V/1m', distanceM: 1, averaging: 'mean',
+  averagingBandHz: [300, 3000], environment: 'anechoic', frequencyHz: 150,
+  instrument: 'Fictional analyzer A',
+};
+const speakerMeasurements: readonly Measurement[] = [
+  { ...base, id: 'speaker-sensitivity', productId: speaker.id, metric: 'sensitivity', value: 86, unit: 'dB', conditions: speakerConditions },
+  { ...base, id: 'speaker-nominal', productId: speaker.id, metric: 'nominalImpedance', value: 8, unit: 'Ω', conditions: {} },
+  { ...base, id: 'speaker-minimum', productId: speaker.id, metric: 'minimumImpedance', value: 3.7, unit: 'Ω', conditions: speakerConditions },
+  { ...base, id: 'speaker-crossover', productId: speaker.id, metric: 'crossoverFrequency', value: 2000, unit: 'Hz', conditions: {} },
+];
+const speakerDataset: Dataset = {
+  ...DEMO_DATASET, products: [...DEMO_DATASET.products, speaker],
+  measurements: [...DEMO_DATASET.measurements, ...speakerMeasurements],
+};
+const reference: MeasurementReference = {
+  id: 'reference-power', productId: base.productId, metric: 'power', sourceId: base.sourceId!,
+  quantities: ['output power'], conditions: {}, status: 'observed', accessedAt: '2026-11-08', notes: null,
+};
+const range: RangeMeasurement = {
+  id: 'range-speaker', productId: speaker.id, metric: 'frequencyRange',
+  lowHz: 47, highHz: 45000, toleranceDb: -6, toleranceKind: 'minus',
+  status: 'manufacturer', sourceId: 'DEMO-MFG-001', conditions: {},
+  capturedAt: '2026-11-08', version: 1, notes: null,
+};
+const errors = (dataset: Dataset) => validateDataset(dataset).filter((issue) => issue.severity === 'error');
+const withMeasurement = (patch: Partial<Measurement>): Dataset => ({
+  ...speakerDataset,
+  measurements: speakerDataset.measurements.map((m) => m.id === base.id ? { ...m, ...patch } : m),
+});
+const withReuse = (reuse: SourceReuse, fictional = true): Dataset => ({
+  ...DEMO_DATASET, fictional,
+  products: DEMO_DATASET.products.map((p) => ({ ...p, fictional })),
+  sources: DEMO_DATASET.sources.map((s, i) => ({
+    ...s, url: `https://example.invalid/fictional/${s.id}`, ...(i === 0 ? { reuse } : {}),
+  })),
+});
+const withReference = (patch: Partial<MeasurementReference> = {}): Dataset => ({
+  ...DEMO_DATASET, references: [{ ...reference, ...patch }],
+});
+const withRange = (patch: Partial<RangeMeasurement> = {}): Dataset => ({
+  ...speakerDataset, ranges: [{ ...range, ...patch }],
+});
+
+function expectError(dataset: Dataset, code: string, path: string, relatedIds: readonly string[]) {
+  expect(errors(dataset)).toEqual([{
+    code, severity: 'error', path, relatedIds, message: expect.stringMatching(/[\u3040-\u30ff\u3400-\u9fff]/u),
+  }]);
+}
+
+describe('schema 1.1 metric and scoring boundaries', () => {
+  it('uses schema 1.1 and permits omitted or empty references and ranges', () => {
+    expect(DATASET_SCHEMA_VERSION).toBe('1.1');
+    expect(DEMO_DATASET.schemaVersion).toBe('1.1');
+    expect(validateDataset({ ...DEMO_DATASET, references: [], ranges: [] })).toEqual(validateDataset(DEMO_DATASET));
+  });
+
+  it('has exactly eight metric ids and complete rule tables', () => {
+    expect([...METRIC_IDS].sort()).toEqual([
+      'crossoverFrequency', 'minimumImpedance', 'nominalImpedance', 'power', 'price', 'sensitivity', 'snr', 'thdn',
+    ]);
+    for (const table of [METRIC_UNITS, METRIC_CATEGORIES, REQUIRED_CONDITIONS, RELEVANT_CONDITIONS, COMPARISON_REQUIRED_CONDITIONS, VALUE_DOMAIN]) {
+      expect(Object.keys(table).sort()).toEqual([...METRIC_IDS].sort());
+    }
+  });
+
+  it('keeps bounds, scoring types and the scoring guard limited to exactly four keys', () => {
+    type ScoringKeys = 'price' | 'power' | 'thdn' | 'snr';
+    expectTypeOf<MetricKey>().toEqualTypeOf<ScoringKeys>();
+    expectTypeOf<keyof typeof METRIC_BOUNDS>().toEqualTypeOf<ScoringKeys>();
+    expectTypeOf<keyof Parameters<typeof scoring.calculateUtility>[0]>().toEqualTypeOf<ScoringKeys>();
+    expectTypeOf<keyof ReturnType<typeof toMetricValues>>().toEqualTypeOf<ScoringKeys>();
+    expect([...METRIC_KEYS].sort()).toEqual(['power', 'price', 'snr', 'thdn']);
+    expect(Object.keys(METRIC_BOUNDS).sort()).toEqual([...METRIC_KEYS].sort());
+    expect(METRIC_IDS.filter(isScoringMetric)).toEqual(METRIC_KEYS);
+    for (const metric of SPEAKER_METRIC_IDS) expect(isScoringMetric(metric)).toBe(false);
+  });
+
+  it('validates and projects all speaker metrics, but never passes them to calculateUtility', () => {
+    expect(errors(speakerDataset)).toEqual([]);
+    const projection = projectProduct(speakerDataset, speaker.id);
+    expect(Object.keys(projection.metrics).sort()).toEqual([...METRIC_IDS].sort());
+    for (const measurement of speakerMeasurements) {
+      expect(projection.metrics[measurement.metric]).toMatchObject({
+        measurementId: measurement.id, status: 'observed', derived: { value: measurement.value }, issues: [],
+      });
+    }
+    const values = toMetricValues(projection);
+    expect(values).toEqual({ price: null, power: null, thdn: null, snr: null });
+    const calculate = vi.spyOn(scoring, 'calculateUtility');
+    try {
+      const weights = { price: 25, power: 25, thdn: 25, snr: 25 };
+      const evaluation = evaluateProduct(speakerDataset, speaker.id, weights);
+      expect(calculate).toHaveBeenCalledExactlyOnceWith(values, weights);
+      expect(Object.keys(calculate.mock.calls[0]![0]).sort()).toEqual([...METRIC_KEYS].sort());
+      expect(evaluation.utility).toMatchObject({ score: null, coverage: 0, status: 'pending' });
+      expect(Object.keys(evaluation.lineage).sort()).toEqual([...METRIC_KEYS].sort());
+    } finally {
+      calculate.mockRestore();
+    }
+  });
+
+  it('measurement.metric-category-mismatch: rejects cross-category metrics, allows price on both', () => {
+    for (const measurement of speakerMeasurements) {
+      expectError(withMeasurement({ metric: measurement.metric, unit: measurement.unit, value: measurement.value }),
+        'measurement.metric-category-mismatch', 'measurements[0]', [base.id, base.productId]);
+    }
+    expectError(withMeasurement({ productId: speaker.id }),
+      'measurement.metric-category-mismatch', 'measurements[0]', [base.id, speaker.id]);
+    for (const productId of [base.productId, speaker.id]) {
+      expect(errors(withMeasurement({ productId, metric: 'price', unit: 'JPY', value: 40000 }))).toEqual([]);
+    }
+  });
+});
+
+describe('source reuse', () => {
+  it('measurement.source-reuse-not-permitted: gates numeric real records only by quoteFacts', () => {
+    const permissions: readonly ReusePermission[] = ['unknown', 'prohibited', 'allowed', 'allowed-with-attribution', 'permitted-by-law-or-terms'];
+    for (const quoteFacts of permissions) {
+      // These are synthetic copies exercising the real-dataset gate, not real measurements.
+      const dataset = withReuse({ ...REUSE_UNCHECKED, quoteFacts, basis: 'Fictional permission record' }, false);
+      const rejected = quoteFacts === 'unknown' || quoteFacts === 'prohibited';
+      const cited = dataset.measurements.flatMap((m, index) => m.sourceId === base.sourceId && m.value !== null
+        ? [{ code: 'measurement.source-reuse-not-permitted', severity: 'error', path: `measurements[${index}]`, relatedIds: [m.id, base.sourceId] }] : []);
+      expect(errors(dataset).map(({ code, severity, path, relatedIds }) => ({ code, severity, path, relatedIds })))
+        .toEqual(rejected ? cited : []);
+    }
+    expect(errors(withReuse(REUSE_UNCHECKED))).toEqual([]);
+    const dataset = withReuse(REUSE_UNCHECKED, false);
+    const missingOnly: Dataset = {
+      ...dataset, measurements: dataset.measurements.map((m) => m.sourceId === base.sourceId
+        ? { ...m, value: null, status: 'missing', sourceId: null } : m),
+    };
+    expect(errors(missingOnly)).toEqual([]);
+  });
+
+  it('source.reuse-checked-at-invalid: rejects invalid dates and accepts unknown or calendar dates', () => {
+    for (const checkedAt of ['', '2026-02-29', '2026/11/08', '2026-11-08T00:00:00Z']) {
+      expectError(withReuse({ ...REUSE_UNCHECKED, checkedAt }), 'source.reuse-checked-at-invalid', 'sources[0]', [base.sourceId!]);
+    }
+    for (const checkedAt of [null, '2024-02-29', '2026-11-08']) {
+      expect(errors(withReuse({ ...REUSE_UNCHECKED, checkedAt }))).toEqual([]);
+    }
+  });
+
+  it('source.reuse-basis-required: every non-unknown permission needs a nonblank basis', () => {
+    for (const key of ['quoteFacts', 'reproduceFigures', 'storeRawData', 'redistribute'] as const) {
+      for (const permission of ['allowed', 'allowed-with-attribution', 'permitted-by-law-or-terms', 'prohibited'] as const) {
+        for (const basis of [null, '', '  ']) {
+          expectError(withReuse({ ...REUSE_UNCHECKED, [key]: permission, basis }),
+            'source.reuse-basis-required', 'sources[0]', [base.sourceId!]);
+        }
+        expect(errors(withReuse({ ...REUSE_UNCHECKED, [key]: permission, basis: 'Fictional permission record' }))).toEqual([]);
+      }
+    }
+    expect(errors(withReuse(REUSE_UNCHECKED))).toEqual([]);
+  });
+});
+
+describe('measurement references', () => {
+  const cases: { code: string; patch: Partial<MeasurementReference>; relatedIds?: string[] }[] = [
+    { code: 'id-empty', patch: { id: '  ' }, relatedIds: ['  '] },
+    { code: 'unknown-product', patch: { productId: 'absent' }, relatedIds: [reference.id, 'absent'] },
+    { code: 'unknown-source', patch: { sourceId: 'absent' }, relatedIds: [reference.id, 'absent'] },
+    { code: 'metric-category-mismatch', patch: { metric: 'sensitivity' }, relatedIds: [reference.id, base.productId] },
+    { code: 'quantities-empty', patch: { quantities: [] } },
+    { code: 'quantities-contain-digits', patch: { quantities: ['3.7 ohms'] } },
+    { code: 'accessed-at-invalid', patch: { accessedAt: '2026-02-29' } },
+  ];
+  it.each(cases)('reference.$code', ({ code, patch, relatedIds }) => {
+    expectError(withReference(patch), `reference.${code}`, 'references[0]', relatedIds ?? [reference.id]);
+    if (code === 'quantities-empty') {
+      expectError(withReference({ quantities: ['power', '  '] }), 'reference.quantities-empty', 'references[0]', [reference.id]);
+    }
+  });
+
+  it('reference.duplicate-id: rejects duplicate references and collisions with measurements', () => {
+    expectError({ ...DEMO_DATASET, references: [reference, { ...reference }] },
+      'reference.duplicate-id', 'references[1]', [reference.id]);
+    expectError(withReference({ id: base.id }), 'reference.duplicate-id', 'references[0]', [base.id]);
+  });
+
+  it('accepts a valid reference without issues and ignores it in projection', () => {
+    expect(validateDataset(withReference())).toEqual(validateDataset(DEMO_DATASET));
+    for (const productId of ['a', 'e']) {
+      // a has a numeric THD+N record, e explicitly declares it missing.
+      const dataset = withReference({ productId, metric: 'thdn', quantities: ['distortion and noise'] });
+      expect(projectMetric(dataset, productId, 'thdn')).toEqual(projectMetric(DEMO_DATASET, productId, 'thdn'));
+      const absent = { ...dataset, measurements: dataset.measurements.filter((m) => m.productId !== productId || m.metric !== 'thdn') };
+      expect(projectMetric(absent, productId, 'thdn')).toMatchObject({ status: 'missing', measurementId: null, derived: { value: null } });
+    }
+  });
+});
+
+describe('frequency ranges', () => {
+  const cases: { code: string; patch: Partial<RangeMeasurement>; relatedIds?: string[] }[] = [
+    { code: 'id-empty', patch: { id: '  ' }, relatedIds: ['  '] },
+    { code: 'unknown-product', patch: { productId: 'absent' }, relatedIds: [range.id, 'absent'] },
+    { code: 'product-not-speaker', patch: { productId: base.productId }, relatedIds: [range.id, base.productId] },
+    { code: 'unknown-source', patch: { sourceId: 'absent' }, relatedIds: [range.id, 'absent'] },
+    { code: 'status-source-kind-conflict', patch: { status: 'observed' }, relatedIds: [range.id, range.sourceId] },
+    { code: 'captured-at-invalid', patch: { capturedAt: '2026-02-29' } },
+  ];
+  it.each(cases)('range.$code', ({ code, patch, relatedIds }) => {
+    expectError(withRange(patch), `range.${code}`, 'ranges[0]', relatedIds ?? [range.id]);
+    if (code === 'status-source-kind-conflict') {
+      expectError(withRange({ sourceId: base.sourceId! }), 'range.status-source-kind-conflict', 'ranges[0]', [range.id, base.sourceId!]);
+    }
+  });
+
+  it('range.duplicate-id: rejects duplicate ranges and collisions with measurements', () => {
+    expectError({ ...speakerDataset, ranges: [range, { ...range }] }, 'range.duplicate-id', 'ranges[1]', [range.id]);
+    expectError(withRange({ id: base.id }), 'range.duplicate-id', 'ranges[0]', [base.id]);
+  });
+
+  it('range.bounds-invalid: requires finite, positive, increasing bounds', () => {
+    const patches: Partial<RangeMeasurement>[] = [
+      { lowHz: 0 }, { lowHz: -1 }, { lowHz: range.highHz }, { lowHz: range.highHz + 1 },
+      { lowHz: NaN }, { highHz: NaN }, { lowHz: Infinity }, { highHz: Infinity }, { highHz: 0 },
+    ];
+    for (const patch of patches) expectError(withRange(patch), 'range.bounds-invalid', 'ranges[0]', [range.id]);
+  });
+
+  it('range.tolerance-invalid: enforces the tolerance sign and finiteness', () => {
+    const patches: Partial<RangeMeasurement>[] = [
+      { toleranceKind: 'minus', toleranceDb: 3 },
+      { toleranceKind: 'plus-minus', toleranceDb: 0 }, { toleranceKind: 'plus-minus', toleranceDb: -3 },
+      ...(['minus', 'plus-minus'] as const).flatMap((toleranceKind) =>
+        [NaN, Infinity, -Infinity].map((toleranceDb) => ({ toleranceKind, toleranceDb }))),
+    ];
+    for (const patch of patches) expectError(withRange(patch), 'range.tolerance-invalid', 'ranges[0]', [range.id]);
+  });
+
+  it('range.version-invalid: requires a positive integer', () => {
+    for (const version of [0, -1, 1.5, NaN, Infinity]) {
+      expectError(withRange({ version }), 'range.version-invalid', 'ranges[0]', [range.id]);
+    }
+  });
+
+  it('accepts 47–45000 Hz at -6 dB minus and 79–28000 Hz at 3 dB plus-minus', () => {
+    const dataset: Dataset = { ...speakerDataset, ranges: [range, {
+      ...range, id: 'range-plus-minus', lowHz: 79, highHz: 28000, toleranceDb: 3, toleranceKind: 'plus-minus',
+    }] };
+    expect(validateDataset(dataset)).toEqual(validateDataset(speakerDataset));
+    expect(projectProduct(dataset, speaker.id)).toEqual(projectProduct(speakerDataset, speaker.id));
+  });
+});
+
+describe('structured conditions and comparison-only instrument requirement', () => {
+  const full: MeasurementConditions = {
+    loadOhms: 8, channelsDriven: 2, bandwidthHz: [20, 20000], distortionCriterion: 'THD+N 1 %',
+    outputLevel: '1 W', weighting: 'A', ...speakerConditions,
+  };
+  const comparedMetrics = ['power', 'thdn', 'snr', 'sensitivity', 'minimumImpedance'] as const;
+  it.each(comparedMetrics)('%s needs a matching instrument on both sides', (metric) => {
+    const a: Measurement = { ...base, metric, unit: METRIC_UNITS[metric].canonical, conditions: full, uncertainty: { type: 'relative', plusMinusPercent: 1 } };
+    const b = { ...a, id: 'other' };
+    expect(COMPARISON_REQUIRED_CONDITIONS[metric]).toContain('instrument');
+    expect(explainComparability(a, b)).toEqual({ level: 'comparable', reasons: [] });
+    const withoutInstrument = { ...full };
+    delete withoutInstrument.instrument;
+    const missing = { ...b, conditions: withoutInstrument };
+    for (const [left, right] of [[a, missing], [missing, a], [missing, missing]] as const) {
+      const result = explainComparability(left, right);
+      expect(result.level).toBe('not-comparable');
+      expect(result.reasons).toContainEqual({ code: 'conditions.unrecorded', details: ['instrument'], message: expect.stringContaining('測定機器') });
+    }
+    const result = explainComparability(a, { ...b, conditions: { ...full, instrument: 'Fictional analyzer B' } });
+    expect(result).toEqual({ level: 'not-comparable', reasons: [{
+      code: 'conditions.mismatch', details: ['instrument'], message: expect.stringContaining('測定機器'),
+    }] });
+    for (const instrument of ['Fictional analyzer A', 'Fictional analyzer B']) expect(result.reasons[0]!.message).toContain(instrument);
+  });
+
+  it('instrument is never required for eligibility and does not create a power projection warning', () => {
+    for (const metric of METRIC_IDS) expect(REQUIRED_CONDITIONS[metric]).not.toContain('instrument');
+    const conditions: MeasurementConditions = { loadOhms: 8, channelsDriven: 2, bandwidthHz: [20, 20000], distortionCriterion: 'THD+N 1 %' };
+    expect(REQUIRED_CONDITIONS.power).toEqual(['loadOhms', 'channelsDriven', 'bandwidthHz', 'distortionCriterion']);
+    const dataset = withMeasurement({ conditions });
+    expect(projectMetric(dataset, base.productId, 'power')).toMatchObject({ status: 'observed', derived: { value: base.value }, issues: [] });
+    expect(toMetricValues(projectProduct(dataset, base.productId)).power).toBe(base.value);
+  });
+
+  it('price comparisons are unaffected by missing or different instruments', () => {
+    const price: Measurement = { ...base, metric: 'price', unit: 'JPY', conditions: {}, uncertainty: { type: 'relative', plusMinusPercent: 1 } };
+    for (const conditions of [{}, { instrument: 'Fictional analyzer A' }, { instrument: 'Fictional analyzer B' }]) {
+      expect(explainComparability(price, { ...price, conditions })).toEqual({ level: 'comparable', reasons: [] });
+      expect(explainComparability({ ...price, conditions: { instrument: 'Fictional analyzer A' } }, { ...price, conditions }))
+        .toEqual({ level: 'comparable', reasons: [] });
+    }
+  });
+
+  it('formats new condition values with explicit units and labels every known key exactly once', () => {
+    expect(formatConditionValue('averagingBandHz', { averagingBandHz: [300, 3000] })).toBe('300–3000 Hz');
+    expect(formatConditionValue('averagingBandHz', { averagingBandHz: [1000, 1000] })).toBe('1000 Hz');
+    expect(formatConditionValue('distanceM', { distanceM: 1 })).toBe('1 m');
+    expect(formatConditionValue('sensitivityReference', { sensitivityReference: '2.83V/1m' })).toBe('2.83V/1m');
+    expect(Object.keys(CONDITION_LABELS).sort()).toEqual([...CONDITION_KEYS].sort());
+    for (const key of CONDITION_KEYS) expect(CONDITION_LABELS[key].trim()).not.toBe('');
+  });
+});

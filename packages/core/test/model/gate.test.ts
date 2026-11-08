@@ -58,7 +58,7 @@ describe('summarizeEvidence', () => {
 });
 
 describe('explainMetricComparability', () => {
-  const full = { ...DEMO_DATASET.measurements[0]!.conditions, outputLevel: '1 W', weighting: 'A' as const };
+  const full = { ...DEMO_DATASET.measurements[0]!.conditions, outputLevel: '1 W', weighting: 'A' as const, instrument: 'Fictional analyzer A', distortionCriterion: 'THD+N 1 %' };
   const conditioned = (fn: (m: Measurement) => Measurement = (m) => m) =>
     edit((m) => fn({ ...m, conditions: full, uncertainty: m.value === null ? null : { type: 'relative', plusMinusPercent: 1 } }));
 
@@ -103,7 +103,7 @@ describe('evaluateProduct lineage', () => {
     const product = toDemoProduct(PREPARED_DEMO_DATASET, 'a');
     const parsed = JSON.parse(buildCatalogJson([product], WEIGHT_PRESETS.balanced, { date: '2026-11-08', dataset: PREPARED_DEMO_DATASET }));
     expect(parsed.version).toBe('0.4.0');
-    expect(parsed.datasetSchemaVersion).toBe('1.0');
+    expect(parsed.datasetSchemaVersion).toBe('1.1');
     const power = parsed.products[0].provenance.power;
     expect(power.measurementId).toBe('m-a-power');
     expect(power.original).toMatchObject({ value: 85, unit: 'W' });

@@ -8,7 +8,7 @@ import type { Measurement } from '../../src/model/types.ts';
 const japanese = /[\u3040-\u30ff\u3400-\u9fff]/u;
 const base: Measurement = {
   ...DEMO_DATASET.measurements[0]!,
-  conditions: { loadOhms: 8, channelsDriven: 2, bandwidthHz: [20, 20000], outputLevel: '1 W', weighting: 'A' },
+  conditions: { loadOhms: 8, channelsDriven: 2, bandwidthHz: [20, 20000], outputLevel: '1 W', weighting: 'A', instrument: 'Fictional analyzer A', distortionCriterion: 'THD+N 1 %' },
   uncertainty: { type: 'relative', plusMinusPercent: 1 },
 };
 const measurement = (patch: Partial<Measurement> = {}): Measurement => ({ ...base, ...patch });
@@ -58,7 +58,7 @@ const cases: Case[] = [
   {
     name: 'unrecorded S/N weighting on one side also counts as a mismatch',
     a: measurement({ metric: 'snr', unit: 'dB' }),
-    b: measurement({ metric: 'snr', unit: 'dB', conditions: { loadOhms: 8, channelsDriven: 2, bandwidthHz: [20, 20000], outputLevel: '1 W' } }),
+    b: measurement({ metric: 'snr', unit: 'dB', conditions: { loadOhms: 8, channelsDriven: 2, bandwidthHz: [20, 20000], outputLevel: '1 W', instrument: 'Fictional analyzer A', distortionCriterion: 'THD+N 1 %' } }),
     level: 'not-comparable', reasons: [
       { code: 'conditions.mismatch', details: ['weighting'] },
       { code: 'conditions.unrecorded', details: ['weighting'] },
@@ -67,12 +67,12 @@ const cases: Case[] = [
   {
     name: 'both condition sets empty',
     a: measurement({ conditions: {} }), b: measurement({ conditions: {} }),
-    level: 'not-comparable', reasons: [{ code: 'conditions.unrecorded', details: ['loadOhms', 'channelsDriven', 'bandwidthHz'] }],
+    level: 'not-comparable', reasons: [{ code: 'conditions.unrecorded', details: ['loadOhms', 'channelsDriven', 'bandwidthHz', 'distortionCriterion', 'instrument'] }],
   },
   {
     name: 'equal recorded conditions do not fill an absent required S/N condition',
-    a: measurement({ metric: 'snr', unit: 'dB', conditions: { outputLevel: '1 W' } }),
-    b: measurement({ metric: 'snr', unit: 'dB', conditions: { outputLevel: '1 W' } }),
+    a: measurement({ metric: 'snr', unit: 'dB', conditions: { outputLevel: '1 W', instrument: 'Fictional analyzer A' } }),
+    b: measurement({ metric: 'snr', unit: 'dB', conditions: { outputLevel: '1 W', instrument: 'Fictional analyzer A' } }),
     level: 'not-comparable', reasons: [{ code: 'conditions.unrecorded', details: ['weighting'] }],
   },
   {

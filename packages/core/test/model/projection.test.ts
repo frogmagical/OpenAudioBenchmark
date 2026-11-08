@@ -109,9 +109,10 @@ describe('projection lineage and issues', () => {
     expect(p.derived.steps[0]!.note).toContain('未測定');
   });
 
-  it('warns when required conditions are unrecorded (demo: THD+N output level, S/N weighting and level)', () => {
+  it('warns when required conditions are unrecorded (demo: power distortion criterion, THD+N output level, S/N weighting and level)', () => {
     const a = projectProduct(DEMO_DATASET, 'a');
-    expect(a.metrics.power.issues).toEqual([]);
+    expect(a.metrics.power.issues.map((i) => i.code)).toEqual(['measurement.required-condition-unrecorded']);
+    expect(a.metrics.power.issues[0]!.message).toContain('distortionCriterion');
     expect(a.metrics.price.issues).toEqual([]);
     expect(a.metrics.thdn.issues.map((i) => i.code)).toEqual(['measurement.required-condition-unrecorded']);
     expect(a.metrics.thdn.issues[0]!.message).toContain('outputLevel');

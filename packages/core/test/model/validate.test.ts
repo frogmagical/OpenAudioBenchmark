@@ -18,30 +18,32 @@ function identity(issue: QualityIssue) {
   return { code: issue.code, severity: issue.severity, path: issue.path, relatedIds: issue.relatedIds };
 }
 
-const missingConditions = [
-  { index: 1, id: 'm-a-thdn', keys: ['outputLevel'] },
-  { index: 2, id: 'm-a-snr', keys: ['weighting', 'outputLevel'] },
-  { index: 5, id: 'm-b-thdn', keys: ['outputLevel'] },
-  { index: 6, id: 'm-b-snr', keys: ['weighting', 'outputLevel'] },
-  { index: 10, id: 'm-c-thdn', keys: ['outputLevel'] },
-  { index: 11, id: 'm-c-snr', keys: ['weighting', 'outputLevel'] },
-  { index: 13, id: 'm-d-thdn', keys: ['outputLevel'] },
-  { index: 14, id: 'm-d-snr', keys: ['weighting', 'outputLevel'] },
-  { index: 19, id: 'm-e-snr', keys: ['weighting', 'outputLevel'] },
-  { index: 22, id: 'm-f-thdn', keys: ['outputLevel'] },
-];
+// Schema 1.1 intentionally leaves these demo conditions unknown: 6 power,
+// 5 non-missing THD+N and 5 non-missing S/N records (16), plus 7 source URLs.
+// Derive record ids, positions and counts from the fixture, not validator output.
+const missingConditions = DEMO_DATASET.measurements.flatMap((measurement, index) => {
+  if (measurement.status === 'missing') return [];
+  const keys = measurement.metric === 'power' ? ['distortionCriterion']
+    : measurement.metric === 'thdn' ? ['outputLevel']
+      : measurement.metric === 'snr' ? ['weighting', 'outputLevel'] : [];
+  return keys.length > 0 ? [{ index, id: measurement.id, keys }] : [];
+});
+const missingSourceUrls = DEMO_DATASET.sources.flatMap((source, index) =>
+  source.url === null && DEMO_DATASET.measurements.some((m) =>
+    m.sourceId === source.id && (m.status === 'observed' || m.status === 'manufacturer'))
+    ? [{ code: 'source.url-missing', severity: 'warning', path: `sources[${index}]`, relatedIds: [source.id] }] : []);
 const demoWarningIdentities = [
-  ...['DEMO-LAB-001', 'DEMO-MFG-001', 'DEMO-LAB-002', 'DEMO-MFG-003', 'DEMO-LAB-004', 'DEMO-MFG-005', 'DEMO-MFG-006']
-    .map((id, i) => ({ code: 'source.url-missing', severity: 'warning', path: `sources[${i}]`, relatedIds: [id] })),
+  ...missingSourceUrls,
   ...missingConditions.map(({ index, id }) => ({
     code: 'measurement.required-condition-unrecorded', severity: 'warning', path: `measurements[${index}]`, relatedIds: [id],
   })),
 ];
 
 describe('demo dataset validation', () => {
-  it('has exactly seven source and ten condition warnings, no errors, and is usable', () => {
+  it('has exactly seven source and sixteen condition warnings, no errors, and is usable', () => {
     const issues = validateDataset(DEMO_DATASET);
-    expect(issues).toHaveLength(17);
+    expect(issues).toHaveLength(missingSourceUrls.length + missingConditions.length);
+    expect(issues.filter((issue) => issue.severity === 'error')).toEqual([]);
     expect(issues.map(identity)).toEqual(demoWarningIdentities);
     for (const { id, keys } of missingConditions) {
       const issue = issues.find((item) => item.relatedIds[0] === id)!;
@@ -223,9 +225,9 @@ describe('warning scope and deterministic order', () => {
       { code: 'product.no-measurements', severity: 'warning', path: 'products[6]', relatedIds: ['empty'] },
       demoWarningIdentities[0],
       { code: 'source.accessed-at-invalid', severity: 'error', path: 'sources[1]', relatedIds: ['DEMO-MFG-001'] },
-      ...demoWarningIdentities.slice(1, 7),
+      ...demoWarningIdentities.slice(1, missingSourceUrls.length),
       { code: 'measurement.version-invalid', severity: 'error', path: 'measurements[0]', relatedIds: ['m-a-power'] },
-      ...demoWarningIdentities.slice(7),
+      ...demoWarningIdentities.slice(missingSourceUrls.length),
     ];
     const issues = validateDataset(dataset);
     expect(issues.map(identity)).toEqual(expected);
