@@ -14,7 +14,7 @@
 | G6 | 定格出力の**歪み基準**(1 % / 0.1 % THD+N など)を保持する条件キーがない。`outputLevel` は「図を取った出力レベル」の意味で、転用は誤用 | 歪み基準が異なる W を別測定として弾けない | **拡張必須** |
 | G7 | `Product` に地域・市場、寸法・質量の項目がない。`FeatureKey` が `hdmi/usb/bt/hp/phono` のアンプ専用列挙で、光・同軸・サブウーファー出力やスピーカーの属性を表せない | 「型番・地域仕様・リビジョン」の同定結果と、LS50 Meta の文書間差(質量・奥行)を記録できない | 拡張推奨(同定記録は `notes` で暫定可) |
 | G8 | `Source` 等の拡張に伴う `DATASET_SCHEMA_VERSION`('1.0')の更新方針がない。ゲートは版不一致をエラーにする | スキーマ変更時に既存データが読めなくなる | 方針決定が必要(1.1 へ更新、架空データも同時移行) |
-| G9 | **採点適格性**の概念がない。現行は必須条件未記録の値も投影され採点に入る | D-17(選択肢 B)を実装できない。「欠測」と「値はあるが採点不適格」を区別できない | **拡張必須**(ADR-0007 P9) |
+| G9 | **採点適格性**の概念がない。現行は必須条件未記録の値も `estimated` も投影され採点に入る | D-17(選択肢 B)と D-08 を実装できない。「欠測」と「値はあるが採点不適格」を区別できない | **拡張必須**(ADR-0007 P9) |
 
 それ以外(出典・証拠種別・条件・不確かさ・系譜・価格観測・インピーダンス特性・品質ゲート)は既存モデルで対応できる。なお、現行の投影は**必須条件が未記録でも値を採用し採点に渡す**(警告のみ)。PL 判定により、これは改める(D-17 選択肢 B → G9)。
 
@@ -85,7 +85,7 @@ interface Source {
 
 | キー | 例 | 判定上の扱い(提案、D-03/D-13) |
 | --- | --- | --- |
-| `instrument?: string` | "Audio Precision APx555"、"Klippel NFS" | 相違は**保留**(P3 未承認: 同等性が確認されるまで保留を維持) |
+| `instrument?: string` | "Audio Precision APx555"、"Klippel NFS" | **比較条件**: 相違・未記録は保留(同等性が証明されるまで)。**採点適格性の必須条件には一律追加しない**(指標・方式別に根拠がある場合のみ、D-03) |
 | `testSignal?: string` | "1 kHz sine, continuous"、"burst" | 相違は**保留**(手順差) |
 | `averaging?: string` | "spot"、"mean"、"IEC"、"Listening Window" | 感度では**保留**(手順差、P8 承認) |
 | `averagingBandHz?: [number, number]` | [300, 3000]、[1000, 1000](点値) | 感度では**保留**。未記録も保留(P8、PL 追加指示) |
@@ -101,19 +101,19 @@ interface Source {
 | A | 新 status `withheld`(値は `null`、出典・条件必須) | 不採用候補(`value: null` の意味が missing と二重化) |
 | B | 別型 `MeasurementReference { id, productId, metric, sourceId, conditions, quantities: string[], note, accessedAt }`。値を持たない。UI は「出典で確認」とリンク表示 | **優先検討** |
 
-内部保存と公開を区別する: **メーカー公称値**(D-15 判断待ち)は `Measurement` + `Source.reuse.quoteFacts: 'unknown'` として内部保持し、公開ビルドでは `MeasurementReference` 相当に落として表示する(数値・図表・本文・生データの区別は `Source.reuse` の 4 項目で表す)。**第三者測定**はパイロットでは `MeasurementReference` のみ(D-16、数値は内部にも保持しない)。検証規則: 出典・条件必須、投影・採点に不採用。
+内部保存と公開を区別する(D-15、PM/法務判断待ち): メーカー公称値を `Measurement` として内部保持できるのは**権利確認済み、または適用法令・利用条件に従って認められる場合に限る**。未確認の間は `MeasurementReference`(リンク・所在・条件のみ)で保持し、公開は別途承認を必須とする(数値・図表・本文・生データの区別は `Source.reuse` の 4 項目で表す)。**第三者測定**はパイロットでは `MeasurementReference` のみ(D-16、数値は内部にも保持しない)。検証規則: 出典・条件必須、投影・採点に不採用。
 
 ### G9 — 採点適格性(D-17 選択肢 B、設計のみ)
 
 | 要素 | 内容 |
 | --- | --- |
 | 状態 | `missing`(値なし)/ `ineligible`(値あり・採点対象外)/ `eligible`(採点入力) |
-| 不適格の条件 | `REQUIRED_CONDITIONS[metric]` に未記録あり、または図表読取由来の `estimated`(P6)、または `MeasurementReference`。`estimated` 全般の不適格化は Claude 側の統合案で要 PL 確認 |
+| 不適格の条件 | 指標別 `REQUIRED_CONDITIONS[metric]` に未記録あり、または `status === 'estimated'`(**全般**、PL 確定 D-08)、または `MeasurementReference`。`instrument` は比較条件であり必須条件には一律含めない(D-03) |
 | 投影 | `MetricProjection` に `eligibility` を追加。`toMetricValues` は eligible のみ値を渡し、ineligible は `null` |
-| カバレッジ | 分母を「採点適格な指標の重み」に変更(解釈は PL 確認事項、ADR-0007)。`calculateUtility` の入力を 3 状態(`eligible` / `ineligible` / `missing`)にするシグネチャ変更が必要。`UtilityResult` に `ineligibleMetrics` を追加し JSON `computed` に出力 |
+| カバレッジ | **分母は全 4 採点指標の重みを維持**(PL 確定)。分子は適格かつ実際に採点された指標の重みのみ(`ineligible` も `missing` も分子に入れない)。例: 等重みで適格 1 / 不適格 3 → 25 % → 保留。`calculateUtility` の入力を 3 状態(`eligible` / `ineligible` / `missing`)にするシグネチャ変更が必要(`ineligible` は coverage 計算上 `missing` と同じ扱いだが、記録・表示で区別)。`UtilityResult` に `ineligibleMetrics` を追加し JSON `computed` に出力 |
 | 選択順位 | 適格性を先に判定し、適格な候補の中で observed > manufacturer > 版 > 日付(P1 条件付き承認) |
 | 表示 | 不適格値は「採点対象外(条件未記録)」と明示し、欠測の「未測定」と区別 |
-| 方法論 | `METHODOLOGY_VERSION` 0.6.0。デモデータの扱いは D-18 |
+| 方法論 | 式・分母・閾値は不変。入力の適格性判定の追加で結果が変わるため実装時に `METHODOLOGY_VERSION` を更新(`0.6.0-demo` 候補)。既存架空デモは不変(条件の機械的補完禁止)、評価結果が変わるなら差分と根拠を別 PR で承認(D-18) |
 
 ### G6 — 定格出力の歪み基準
 
