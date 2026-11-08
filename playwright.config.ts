@@ -13,7 +13,10 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'npm run preview -- --host 127.0.0.1 --port 4173 --strictPort',
+    // Run vite directly in the web package: `npm run <script> -- --flag` loses the flags when it
+    // is forwarded through the workspace root.
+    command: 'npx vite preview --host 127.0.0.1 --port 4173 --strictPort',
+    cwd: 'apps/web',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env['CI'],
     timeout: 60_000,
