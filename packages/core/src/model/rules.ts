@@ -62,7 +62,7 @@ export function unrecordedRequiredConditions(
 
 /** Shared Japanese message for unrecorded required conditions (validation, projection, comparability). */
 export function unrecordedConditionsMessage(metric: MetricId, keys: readonly (keyof MeasurementConditions)[]): string {
-  return `${metric} の比較に必要な測定条件が未記録です: ${keys.join(', ')}`;
+  return `${metric} の比較に必要な測定条件が未記録です: ${keys.map((k) => `${CONDITION_LABELS[k]} (${k})`).join(', ')}`;
 }
 
 /**

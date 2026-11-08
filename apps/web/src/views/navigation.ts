@@ -34,13 +34,19 @@ export function goView(rawName: string): ViewName {
   return name;
 }
 
+const onDocumentClick = (e: Event): void => {
+  const el = (e.target as Element | null)?.closest<HTMLElement>('[data-go]');
+  if (el) goView(el.dataset['go'] ?? 'overview');
+};
+const onHashChange = (): void => {
+  goView(location.hash.slice(1));
+};
+
 export function initNavigation(): void {
   // Delegated so that links rendered later (e.g. inside catalog record details) navigate too.
-  document.addEventListener('click', (e) => {
-    const el = (e.target as Element | null)?.closest<HTMLElement>('[data-go]');
-    if (el) goView(el.dataset['go'] ?? 'overview');
-  });
-  window.addEventListener('hashchange', () => goView(location.hash.slice(1)));
+  // Re-registering the same function references is a no-op, so repeated init (tests) does not stack handlers.
+  document.addEventListener('click', onDocumentClick);
+  window.addEventListener('hashchange', onHashChange);
   goView(location.hash.slice(1) || 'overview');
   // Deep links (/#pairing): the browser scrolls to the fragment's section after this module ran,
   // which parks the section title under the sticky header. Re-assert the top once loading ends.

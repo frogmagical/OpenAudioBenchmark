@@ -431,26 +431,40 @@ describe('sources and evidence view', () => {
     expect(cells[1]).toBe('第三者測定機関');
     expect(cells[3]).toBe('未記録');
     expect(cells[5]).toBe('2026-11-08');
+    expect(cells[6]).toBe('未記録'); // licence
     expect(cells[7]).toBe('3');
+    expect(lab.querySelector('[data-issue="source.url-missing"]')).not.toBeNull();
     expect(document.querySelectorAll('#sourcesTable a')).toHaveLength(0);
+    expect(document.querySelectorAll('#sourcesTable thead th[scope="col"]')).toHaveLength(10);
   });
 
   it('shows per-metric value, evidence status, source, conditions, uncertainty and warnings for each product', () => {
     const rows = Array.from(document.querySelectorAll<HTMLElement>('#evidenceTable tbody tr'));
     expect(rows).toHaveLength(6 * 4);
+    expect(document.querySelectorAll('#evidenceTable tbody')).toHaveLength(6);
+    expect(document.querySelectorAll('#evidenceTable tbody th[scope="rowgroup"]')).toHaveLength(6);
+    expect(document.querySelectorAll('#evidenceTable thead th[scope="col"]')).toHaveLength(8);
     const ePower = rows.find((r) => r.dataset['productId'] === 'e' && r.dataset['metric'] === 'power')!;
     expect(ePower.dataset['status']).toBe('manufacturer');
     expect(ePower.textContent).toContain('40 W');
     expect(ePower.textContent).toContain('DEMO-MFG-005');
     expect(ePower.textContent).toContain('負荷インピーダンス: 8 Ω');
     expect(ePower.textContent).toContain('未記録'); // uncertainty unstated
+    expect(ePower.textContent).toContain('版 1');
+    const aPrice = rows.find((r) => r.dataset['productId'] === 'a' && r.dataset['metric'] === 'price')!;
+    expect(aPrice.textContent).toContain('46,000円');
+    const aThdn = rows.find((r) => r.dataset['productId'] === 'a' && r.dataset['metric'] === 'thdn')!;
+    expect(aThdn.textContent).toContain('THD+N');
+    expect(aThdn.textContent).toContain('0.005 %');
     const eThdn = rows.find((r) => r.dataset['productId'] === 'e' && r.dataset['metric'] === 'thdn')!;
     expect(eThdn.dataset['status']).toBe('missing');
     expect(eThdn.querySelector('.status-pill')!.textContent).toBe('未測定');
     expect(eThdn.textContent).not.toContain('0 %');
+    expect(eThdn.querySelector('.conditions-list')).toBeNull(); // no metadata for a value that does not exist
+    expect(Array.from(eThdn.querySelectorAll('td')).map((c) => c.textContent).slice(3, 6)).toEqual(['—', '—', '—']);
     const aSnr = rows.find((r) => r.dataset['productId'] === 'a' && r.dataset['metric'] === 'snr')!;
     expect(aSnr.dataset['status']).toBe('observed');
-    expect(aSnr.textContent).toContain('weighting');
+    expect(aSnr.textContent).toContain('重み付け');
     const statuses = new Set(rows.map((r) => r.dataset['status']));
     expect(statuses).toEqual(new Set(['observed', 'manufacturer', 'missing']));
   });
@@ -469,6 +483,37 @@ describe('sources and evidence view', () => {
     expect(el('#currentView').textContent).toBe('出典・根拠');
   });
 
+  it('shows the derivation of estimated values, converted values, links for http(s) URLs and products without records', () => {
+    const full = { ...DEMO_DATASET.measurements[0]!.conditions, outputLevel: '1 W', weighting: 'A' as const };
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      products: [...DEMO_DATASET.products, { ...DEMO_DATASET.products[0]!, id: 'ghost', name: 'Ghost Amp（架空）' }],
+      sources: DEMO_DATASET.sources.map((s) => (s.id === 'DEMO-LAB-001' ? { ...s, url: ' https://example.test/report-1 ', license: 'CC BY 4.0' } : s)),
+      measurements: DEMO_DATASET.measurements.map((m) => {
+        if (m.id === 'm-c-power') return { ...m, status: 'estimated', derivation: '同シリーズの定格から推定（架空）', conditions: full };
+        if (m.id === 'm-a-thdn') return { ...m, value: -80, unit: 'dB', conditions: full };
+        return m;
+      }),
+    };
+    document.body.innerHTML = body;
+    initApp(prepareDataset(ds));
+    const cPower = el<HTMLElement>('#evidenceTable tr[data-product-id="c"][data-metric="power"]');
+    expect(cPower.dataset['status']).toBe('estimated');
+    expect(cPower.querySelector('[data-derivation]')!.textContent).toContain('同シリーズの定格から推定');
+    const aThdn = el<HTMLElement>('#evidenceTable tr[data-product-id="a"][data-metric="thdn"]');
+    expect(aThdn.textContent).toContain('-80 dB');
+    expect(aThdn.textContent).toContain('→ 0.01 %（換算）');
+    const link = el<HTMLAnchorElement>('#sourcesTable tr[data-source-id="DEMO-LAB-001"] a');
+    expect(link.href).toBe('https://example.test/report-1');
+    expect(link.rel).toContain('noopener');
+    expect(link.target).toBe('_blank');
+    expect(el('#sourcesTable tr[data-source-id="DEMO-LAB-001"]').textContent).toContain('CC BY 4.0');
+    const ghost = Array.from(document.querySelectorAll<HTMLElement>('#evidenceTable tr[data-product-id="ghost"]'));
+    expect(ghost).toHaveLength(4);
+    expect(ghost.every((r) => r.dataset['status'] === 'missing')).toBe(true);
+    expect(ghost[0]!.querySelector('th')!.querySelector('[data-issue="product.no-measurements"]')).not.toBeNull();
+  });
+
   it('escapes source and product text', () => {
     const ds: Dataset = {
       ...DEMO_DATASET,
@@ -479,6 +524,7 @@ describe('sources and evidence view', () => {
     expect(document.querySelectorAll('#sourcesTable img')).toHaveLength(0);
     expect(document.querySelectorAll('#sourcesTable a')).toHaveLength(0);
     expect(el('#sourcesTable').textContent).toContain('<img src=x onerror="alert(1)">');
+    expect(el('#sourcesTable').textContent).toContain('リンク化しない形式');
   });
 });
 
