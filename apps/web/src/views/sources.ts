@@ -7,19 +7,34 @@
 import {
   CONDITION_KEYS,
   CONDITION_LABELS,
-  METRIC_KEYS,
+  METRIC_CATEGORIES,
+  METRIC_IDS,
   METRIC_UNITS,
   PREPARED_DEMO_DATASET,
   STATUS_LABELS,
   formatConditionValue,
   projectProduct,
 } from '@openaudiobenchmark/core';
-import type { MeasurementConditions, MeasurementStatus, MetricKey, PreparedDataset, Source, Uncertainty } from '@openaudiobenchmark/core';
+import type { MeasurementConditions, MeasurementStatus, MetricId, PreparedDataset, Product, Source, Uncertainty } from '@openaudiobenchmark/core';
 import { escapeHtml, qs } from '../dom.ts';
 import { fmt } from '../format.ts';
 
 /** Metric names as the catalog and comparison views print them (not the scoring-direction labels). */
-const METRIC_NAMES: Readonly<Record<MetricKey, string>> = { price: '価格', power: '出力（8Ω）', thdn: 'THD+N', snr: 'S/N' };
+const METRIC_NAMES: Readonly<Record<MetricId, string>> = {
+  price: '価格',
+  power: '出力（8Ω）',
+  thdn: 'THD+N',
+  snr: 'S/N',
+  sensitivity: '感度',
+  nominalImpedance: '公称インピーダンス',
+  minimumImpedance: '最小インピーダンス',
+  crossoverFrequency: 'クロスオーバー周波数',
+};
+
+/** Metrics that make sense for a product's category (schema 1.1, METRIC_CATEGORIES). */
+export function metricsForProduct(p: Product): MetricId[] {
+  return METRIC_IDS.filter((m) => METRIC_CATEGORIES[m].includes(p.category));
+}
 
 function formatRecorded(value: number, unit: string): string {
   if (unit === 'JPY') return `${fmt(value)}円`;
@@ -109,7 +124,8 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
 
   const bodies = dataset.products.map((p) => {
     const projection = projectProduct(prepared, p.id);
-    const rows = METRIC_KEYS.map((k, i) => {
+    const metricList = metricsForProduct(p);
+    const rows = metricList.map((k, i) => {
       const m = projection.metrics[k];
       const record = m.measurementId ? dataset.measurements.find((x) => x.id === m.measurementId) : undefined;
       const present = record !== undefined && record.value !== null && m.status !== 'missing';
@@ -128,7 +144,7 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
       return (
         `<tr data-product-id="${escapeHtml(p.id)}" data-metric="${k}" data-status="${m.status}">` +
         (i === 0
-          ? `<th scope="rowgroup" rowspan="${METRIC_KEYS.length}">${escapeHtml(p.name)}<br><span class="small">${escapeHtml(p.maker)}${p.revision ? ` / ${escapeHtml(p.revision)}` : ''}</span>${productIssues(p.id)}</th>`
+          ? `<th scope="rowgroup" rowspan="${metricList.length}">${escapeHtml(p.name)}<br><span class="small">${escapeHtml(p.maker)}${p.revision ? ` / ${escapeHtml(p.revision)}` : ''}</span>${productIssues(p.id)}</th>`
           : '') +
         `<td>${METRIC_NAMES[k]}</td><td class="num">${value}${converted}</td><td>${pill(m.status)}${derivation}${meta}</td><td class="id">${present && m.sourceId ? escapeHtml(m.sourceId) : '—'}</td>` +
         `<td>${present ? conditionsList(record.conditions) : '—'}</td><td>${present ? formatUncertainty(record.uncertainty) : '—'}</td>` +
