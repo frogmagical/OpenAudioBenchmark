@@ -3,33 +3,11 @@
  * Shared value domains and relevant condition rules govern the checks below.
  */
 import { compareConditions } from '../conditions.ts';
+import { isCalendarDate, isInvalidUncertainty, isZeroUncertainty } from './common.ts';
 import { isValueInDomain, METRIC_UNITS, RELEVANT_CONDITIONS, unrecordedConditionsMessage, unrecordedRequiredConditions, VALUE_DOMAIN } from './rules.ts';
 import { DATASET_SCHEMA_VERSION } from './types.ts';
 import type { Dataset, Measurement, QualityIssue, Source } from './types.ts';
 
-function isCalendarDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
-}
-
-function hasInvalidUncertainty({ uncertainty }: Measurement): boolean {
-  if (uncertainty === null) return false;
-  switch (uncertainty.type) {
-    case 'absolute': return !Number.isFinite(uncertainty.plusMinus) || uncertainty.plusMinus < 0;
-    case 'relative': return !Number.isFinite(uncertainty.plusMinusPercent) || uncertainty.plusMinusPercent < 0;
-    case 'range': return !Number.isFinite(uncertainty.low) || !Number.isFinite(uncertainty.high) || uncertainty.low > uncertainty.high;
-  }
-}
-
-function hasZeroUncertainty({ uncertainty }: Measurement): boolean {
-  if (uncertainty === null) return false;
-  switch (uncertainty.type) {
-    case 'absolute': return uncertainty.plusMinus === 0;
-    case 'relative': return uncertainty.plusMinusPercent === 0;
-    case 'range': return uncertainty.low === uncertainty.high;
-  }
-}
 
 /**
  * Validate a dataset and return every issue found (empty array = clean).
@@ -177,8 +155,8 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     if (measurement.uncertainty !== null && measurement.uncertainty.type !== 'relative' && measurement.uncertainty.unit !== unit) {
       error('measurement.uncertainty-unit-mismatch', '不確かさの単位は測定値の単位と一致させてください');
     }
-    if (hasZeroUncertainty(measurement)) error('measurement.uncertainty-zero', '不確かさをゼロで記録できません。不明な場合は null にしてください');
-    else if (hasInvalidUncertainty(measurement)) error('measurement.uncertainty-invalid', '不確かさは有限の非負値（範囲は low ≤ high）で記録してください');
+    if (measurement.uncertainty !== null && isZeroUncertainty(measurement.uncertainty)) error('measurement.uncertainty-zero', '不確かさをゼロで記録できません。不明な場合は null にしてください');
+    else if (measurement.uncertainty !== null && isInvalidUncertainty(measurement.uncertainty)) error('measurement.uncertainty-invalid', '不確かさは有限の非負値（範囲は low ≤ high）で記録してください');
     if (!Number.isInteger(version) || version <= 0) error('measurement.version-invalid', '測定レコードの版は正の整数でなければなりません');
     if (measurement.capturedAt !== null && !isCalendarDate(measurement.capturedAt)) {
       error('measurement.captured-at-invalid', '測定日は実在する日付を YYYY-MM-DD 形式で記録してください');

@@ -14,7 +14,7 @@ import type { EvidenceStatus, FeatureKey, MeasurementConditions, MetricKey } fro
 /** Metrics the model knows. Reuses the Phase 1 keys so the scorer needs no mapping. */
 export type MetricId = MetricKey;
 
-export type Unit = 'JPY' | 'W' | '%' | 'dB';
+export type Unit = 'JPY' | 'W' | '%' | 'dB' | 'Ω' | 'deg';
 
 export const DATASET_SCHEMA_VERSION = '1.0' as const;
 
@@ -106,7 +106,7 @@ export interface QualityIssue {
 
 /** One tracked step from an original record to a derived value. */
 export interface TransformStep {
-  readonly op: 'select-measurement' | 'unit-convert' | 'aggregate' | 'withhold' | 'normalize';
+  readonly op: 'select-measurement' | 'unit-convert' | 'interpolate' | 'aggregate' | 'withhold' | 'normalize';
   readonly input: unknown;
   readonly output: unknown;
   readonly note: string;
