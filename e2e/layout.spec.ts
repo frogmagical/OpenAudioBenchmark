@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-const VIEWS = ['overview', 'benchmark', 'compare', 'pairing', 'methodology', 'principles'] as const;
+const VIEWS = ['overview', 'benchmark', 'compare', 'pairing', 'methodology', 'principles', 'sources'] as const;
 
 test.describe('layout at the project viewport', () => {
   for (const view of VIEWS) {

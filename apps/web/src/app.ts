@@ -7,6 +7,7 @@ import type { CatalogController } from './views/catalog.ts';
 import { renderMethodologyMeta } from './views/methodology.ts';
 import { initNavigation } from './views/navigation.ts';
 import { initPairing } from './views/pairing.ts';
+import { renderSources } from './views/sources.ts';
 
 export interface App {
   readonly catalog: CatalogController;
@@ -17,6 +18,7 @@ export function initApp(prepared: PreparedDataset = PREPARED_DEMO_DATASET): App 
   const catalog = initCatalog(prepared);
   initPairing();
   renderMethodologyMeta();
+  renderSources(prepared);
   initNavigation();
   return { catalog };
 }
