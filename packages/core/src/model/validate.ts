@@ -5,7 +5,7 @@
 import { compareConditions } from '../conditions.ts';
 import { isCalendarDate, isInvalidUncertainty, isZeroUncertainty } from './common.ts';
 import { conditionValueProblem, isValueInDomain, METRIC_CATEGORIES, METRIC_UNITS, RELEVANT_CONDITIONS, STATUS_PRIORITY, unrecordedConditionsMessage, unrecordedRequiredConditions, VALUE_DOMAIN } from './rules.ts';
-import { DATASET_SCHEMA_VERSION, NUMBER_STORAGE_PERMITTED } from './types.ts';
+import { DATASET_SCHEMA_VERSION, METRIC_IDS, NUMBER_STORAGE_PERMITTED } from './types.ts';
 import type { Dataset, Measurement, QualityIssue, Source } from './types.ts';
 import type { MeasurementConditions } from '../types.ts';
 
@@ -29,6 +29,8 @@ import type { MeasurementConditions } from '../types.ts';
  * - `measurement.source-forbidden`: `status === 'missing'` with a `sourceId` (nothing was measured, so nothing is cited).
  * - `measurement.unit-not-accepted`: `unit` not in `METRIC_UNITS[metric].accepted`.
  * - `measurement.metric-category-mismatch`: metric not allowed for the product's category (`METRIC_CATEGORIES`).
+ * - `measurement.metric-invalid` / `reference.metric-invalid`: metric outside `METRIC_IDS` (`range.metric-invalid`: not
+ *   `frequencyRange`). Metric-dependent checks (units, domain, category, conditions) are skipped for an unknown metric.
  * - `measurement.status-invalid` / `reference.status-invalid` / `range.status-invalid`: evidence status outside the
  *   vocabulary (references and ranges additionally may not be `missing`). Runtime data is not trusted to match the types.
  * - `measurement.condition-value-invalid` / `reference.condition-value-invalid` / `range.condition-value-invalid`:
@@ -182,6 +184,9 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     };
     if (id.trim() === '') error('measurement.id-empty', '測定の識別子は空にできません');
     if (!STATUS_PRIORITY.includes(status)) error('measurement.status-invalid', `証拠種別は ${STATUS_PRIORITY.join(' | ')} のいずれかです`);
+    // Metric tables are plain objects keyed by metric id; an unknown (or prototype-named) metric must never index them.
+    const metricKnown = METRIC_IDS.includes(metric);
+    if (!metricKnown) error('measurement.metric-invalid', `指標は ${METRIC_IDS.join(' | ')} のいずれかです`);
     if (seenMeasurements.has(id)) error('measurement.duplicate-id', '測定の識別子が重複しています');
     seenMeasurements.add(id);
     if (!productIds.has(productId)) error('measurement.unknown-product', '参照先の製品が見つかりません', [id, productId]);
@@ -193,18 +198,18 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     }
     if (value !== null) {
       if (!Number.isFinite(value)) error('measurement.value-not-finite', '測定値は有限の数値でなければなりません');
-      else if (!isValueInDomain(metric, unit, value)) {
+      else if (metricKnown && !isValueInDomain(metric, unit, value)) {
         const domain = VALUE_DOMAIN[metric][unit];
         error('measurement.value-out-of-domain', `${metric} の測定値は ${domain?.min} ${unit} ${domain?.exclusiveMin ? 'より大きい値' : '以上'}でなければなりません`);
       }
     }
     if (status !== 'missing' && sourceId === null) error('measurement.source-required', '未測定以外の測定には出典が必要です');
     if (status === 'missing' && sourceId !== null) error('measurement.source-forbidden', '未測定のレコードに出典は設定できません');
-    if (!METRIC_UNITS[metric].accepted.includes(unit)) error('measurement.unit-not-accepted', `${metric} の単位 ${unit} は対応していません`);
+    if (metricKnown && !METRIC_UNITS[metric].accepted.includes(unit)) error('measurement.unit-not-accepted', `${metric} の単位 ${unit} は対応していません`);
     const conditionIssues = conditionProblems(measurement.conditions);
     if (conditionIssues.length > 0) error('measurement.condition-value-invalid', `測定条件の値が不正です: ${conditionIssues.join('; ')}`);
     const owner = productsById.get(productId);
-    if (owner && !METRIC_CATEGORIES[metric].includes(owner.category)) {
+    if (metricKnown && owner && !METRIC_CATEGORIES[metric].includes(owner.category)) {
       error('measurement.metric-category-mismatch', `${metric} は ${owner.category} の製品には記録できません`, [id, productId]);
     }
     if (!dataset.fictional && value !== null && sourceId !== null) {
@@ -234,7 +239,7 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
       error('measurement.status-source-kind-conflict', '測定の証拠種別と出典の種別が矛盾しています', [id, source.id]);
     }
 
-    if (status !== 'missing') {
+    if (status !== 'missing' && metricKnown) {
       if (!hasError && value !== null && Number.isFinite(value)) usableMeasurements.add(measurement);
       const unrecorded = unrecordedRequiredConditions(metric, measurement.conditions);
       if (unrecorded.length > 0) {
@@ -269,12 +274,14 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     const path = `references[${index}]`;
     const error = (code: string, message: string, relatedIds = [ref.id]) => add(code, 'error', path, message, relatedIds);
     if (ref.id.trim() === '') error('reference.id-empty', '測定参照の識別子は空にできません');
+    const refMetricKnown = METRIC_IDS.includes(ref.metric);
+    if (!refMetricKnown) error('reference.metric-invalid', `測定参照の指標は ${METRIC_IDS.join(' | ')} のいずれかです`);
     if (!RECORD_STATUSES.includes(ref.status)) error('reference.status-invalid', `測定参照の証拠種別は ${RECORD_STATUSES.join(' | ')} のいずれかです`);
     if (seenReferences.has(ref.id) || seenMeasurements.has(ref.id)) error('reference.duplicate-id', '測定参照の識別子が重複しています');
     seenReferences.add(ref.id);
     const owner = productsById.get(ref.productId);
     if (!owner) error('reference.unknown-product', '参照先の製品が見つかりません', [ref.id, ref.productId]);
-    else if (!METRIC_CATEGORIES[ref.metric].includes(owner.category)) error('reference.metric-category-mismatch', `${ref.metric} は ${owner.category} の製品には記録できません`, [ref.id, ref.productId]);
+    else if (refMetricKnown && !METRIC_CATEGORIES[ref.metric].includes(owner.category)) error('reference.metric-category-mismatch', `${ref.metric} は ${owner.category} の製品には記録できません`, [ref.id, ref.productId]);
     if (!sources.has(ref.sourceId)) error('reference.unknown-source', '参照先の出典が見つかりません', [ref.id, ref.sourceId]);
     if (ref.quantities.length === 0 || ref.quantities.some((q) => q.trim() === '')) error('reference.quantities-empty', '測定参照には何が測定されているかを言葉で記録してください');
     if (ref.quantities.some((q) => /\p{Nd}/u.test(q))) error('reference.quantities-contain-digits', '測定参照の quantities に数値を含めてはいけません(値は転記しない。全角数字も不可)');
@@ -292,6 +299,7 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     const path = `ranges[${index}]`;
     const error = (code: string, message: string, relatedIds = [range.id]) => add(code, 'error', path, message, relatedIds);
     if (range.id.trim() === '') error('range.id-empty', '範囲レコードの識別子は空にできません');
+    if (range.metric !== 'frequencyRange') error('range.metric-invalid', '範囲レコードの指標は frequencyRange です');
     if (!RECORD_STATUSES.includes(range.status)) error('range.status-invalid', `範囲レコードの証拠種別は ${RECORD_STATUSES.join(' | ')} のいずれかです`);
     if (seenRanges.has(range.id) || seenMeasurements.has(range.id) || seenReferences.has(range.id)) error('range.duplicate-id', '範囲レコードの識別子が重複しています(測定・参照とも共有不可)');
     seenRanges.add(range.id);

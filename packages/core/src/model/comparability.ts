@@ -4,6 +4,7 @@
  */
 import { compareConditions } from '../conditions.ts';
 import { COMPARISON_REQUIRED_CONDITIONS, CONDITION_LABELS, formatConditionValue, isConditionRecorded, RELEVANT_CONDITIONS, STATUS_LABELS, unrecordedRequiredConditions } from './rules.ts';
+import { METRIC_IDS } from './types.ts';
 import type { Measurement } from './types.ts';
 import { toCanonicalUnit } from './units.ts';
 
@@ -28,6 +29,8 @@ export interface Comparability {
  *
  * not-comparable
  * - `metric.differs`: `a.metric !== b.metric`.
+ * - `metric.unknown`: a metric outside `METRIC_IDS` on either side; no further rule runs (the metric tables
+ *   cannot be indexed by an unknown string).
  * - `value.missing`: either side is `missing`, null or non-finite (nothing to compare).
  * - `unit.not-convertible`: a recorded finite value cannot convert to its metric's canonical unit.
  *   Missing/non-finite values are never probed with a substitute value.
@@ -56,6 +59,11 @@ export function explainComparability(a: Measurement, b: Measurement): Comparabil
   const add = (code: string, message: string, details: readonly string[]) => reasons.push({ code, message, details });
 
   if (a.metric !== b.metric) add('metric.differs', '指標が異なるため、測定値を直接比較できません', [a.metric, b.metric]);
+  const unknownMetrics = [a.metric, b.metric].filter((metric) => !METRIC_IDS.includes(metric));
+  if (unknownMetrics.length > 0) {
+    add('metric.unknown', '未知の指標のため比較できません', [...new Set(unknownMetrics)]);
+    return { level: 'not-comparable', reasons };
+  }
   const aHasValue = a.value !== null && Number.isFinite(a.value);
   const bHasValue = b.value !== null && Number.isFinite(b.value);
   if (a.status === 'missing' || b.status === 'missing' || !aHasValue || !bHasValue) {

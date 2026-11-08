@@ -576,6 +576,26 @@ describe('runtime shape guards (final audit: status vocabulary, condition types,
     }
   });
 
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf', 'loudness', ''])(
+    'rejects the unknown metric %j on measurements, references and in comparability without throwing', (metric) => {
+      const m = metric as unknown as Measurement['metric'];
+      const ds = withMeasurement({ metric: m });
+      expect(() => validateDataset(ds)).not.toThrow();
+      expectError(ds, 'measurement.metric-invalid', 'measurements[0]', [base.id]);
+      const rds = withReference({ metric: m });
+      expect(() => validateDataset(rds)).not.toThrow();
+      expectError(rds, 'reference.metric-invalid', 'references[0]', [reference.id]);
+      const a: Measurement = { ...base, metric: m };
+      const result = explainComparability(a, { ...a, id: 'other' });
+      expect(result.level).toBe('not-comparable');
+      expect(result.reasons).toEqual([{ code: 'metric.unknown', details: [metric], message: expect.stringContaining('未知の指標') }]);
+    },
+  );
+
+  it('rejects a range whose metric is not frequencyRange', () => {
+    expectError(withRange({ metric: 'constructor' as unknown as RangeMeasurement['metric'] }), 'range.metric-invalid', 'ranges[0]', [range.id]);
+  });
+
   it('public core helpers refuse an unusable dataset', () => {
     const wrongVersion = { ...DEMO_DATASET, schemaVersion: '0.9' } as unknown as Dataset;
     const unusable = prepareDataset(wrongVersion);
