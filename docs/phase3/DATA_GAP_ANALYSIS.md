@@ -133,7 +133,7 @@ interface Source {
 | --- | --- | --- |
 | スピーカー製品に `power` / `thdn` / `snr` 測定を登録したらエラー、アンプ製品に `sensitivity` 等を登録したらエラー(カテゴリ×指標の整合) | 追加必須 | 現在は未チェック(P2-1 の独立レビュー報告「Could not verify: category/metric compatibility rule」、PR #4 本文参照) |
 | `sensitivity` に `inputSignal` が無ければ警告、相性診断では採用しない | 追加必須 | 2.83V/1W の混同防止(AGENTS §4) |
-| 非架空データセットで `Source.url` 必須(既存)に加え、`reuse.quoteFacts !== 'prohibited'` | 追加必須 | 利用許諾 |
+| 非架空データセットで `Source.url` 必須(既存)に加え、数値を持つ `Measurement` の出典は `reuse.quoteFacts` が**権利確認済み(`allowed` / `allowed-with-attribution`)、または法令・利用条件で保存可能と確認済み**の場合に限る。`unknown` / `prohibited` の出典は `MeasurementReference` のみ(G3 検証規則と同一方針) | 追加必須 | 利用許諾(D-15) |
 | `Product.revision` が `null` の非架空製品は警告 | 追加推奨 | 同定の不確かさを可視化 |
 
 ## 変更しないもの
