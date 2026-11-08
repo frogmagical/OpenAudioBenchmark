@@ -1,0 +1,14 @@
+{
+  "name": "@openaudiobenchmark/core",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Framework-neutral evaluation core: fictional demo fixtures, weighted utility score, data coverage and amp–speaker pairing estimate",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}
