@@ -16,10 +16,15 @@ Additional record types:
 
 | Entity | Purpose | Module |
 | --- | --- | --- |
+| `PriceObservation`, `ExchangeRate` | Prices as dated observations under stated conditions; tracked currency conversion; comparable-group summaries | `model/price` (ADR-0005) |
 | `SpeakerElectricalTrace` | Impedance magnitude and phase vs frequency with method, conditions, uncertainty; points marked measured / interpolated / converted | `model/trace` (ADR-0006) |
-| `PriceObservation`, `ExchangeRate` | Prices as dated observations under stated conditions; tracked currency conversion | `model/price` (ADR-0005, separate PR) |
 
 Not yet implemented: `ComparisonContext`, `PairingContext`.
+
+### Price observations
+
+- `validatePriceObservations`: ids, references, amount domain (null = unobservable, 0 only with a reason), currency list, ISO 8601 date-time with offset and real calendar day, blank text, version, list price only from manufacturer sources, rate sanity (positive, different currencies, calendar date, method). Warnings: unstated tax/shipping, missing amount, product without prices.
+- `convertPrice` is a tracked step (rate, date, method, source); `value` unrounded, `display` rounded half-up. `explainPriceComparability` names what differs; `summarizePrices` never merges groups with different currency/kind/condition/tax/shipping/bundle/locale and excludes null and zero amounts.
 
 ### Electrical load traces
 

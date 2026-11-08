@@ -1,6 +1,6 @@
 # ADR-0006 — Speaker electrical load traces (P2-3B)
 
-Status: **proposed** — data model and validation implemented for review; no evaluation logic uses the data until the PL accepts the interpretation section.
+Status: **accepted in part** (PL review 2026-11-08). The data model, validation and the storage rules below are accepted. Every evaluation use of trace data (load-difficulty figures, amplifier compatibility or safety verdicts) remains **unapproved**; the pairing load card stays 判定保留.
 
 ## Context
 
@@ -20,18 +20,26 @@ The pairing view's "電気的負荷の適合性" card has been 判定保留 sinc
 - Sign convention: positive phase = inductive (current lags voltage), the usual electrical convention. Published plots do not all follow it; the convention of each source must be checked before ingestion (Stereophile documents historical reversed plots in its measurement methodology articles).
 - Impedance depends on drive level and signal (thermal and nonlinear effects, especially near resonance), on cabinet state (ports open/closed, damping), on conditioning/break-in and thermal history, and on the measurement circuit (sense-resistor loading, input impedance, calibration). The ARTA *LIMP* tutorial (§3.1, https://www.artalabs.hr/AppNotes/LIMP_Tutorial_Version_2_4_English.pdf) and the REW impedance-measurement help (https://www.roomeqwizard.com/help/help_en-GB/html/impedancemeasurement.html) describe these effects for the respective tools. Hence drive level, technique and conditions are recorded, and traces measured under different conditions are never merged. These references support recording context; they are not used as correction factors.
 
-## Storage policies (product decisions, not physics — for PL confirmation)
+## Storage and validation rules approved by the PL (2026-11-08)
 
-1. A trace needs at least two primary points; a single impedance sample would be stored as a `Measurement`, not a trace.
-2. |Z| must be > 0: an exact short is passive but is not meaningful loudspeaker data.
-3. A point with neither |Z| nor phase is rejected (omit the point instead).
-4. Uncertainty-aware tolerance on the ±90° rule (e.g. accepting 90.3° ± 1°) is **not** applied; out-of-range values on passive traces are errors until the PL sets a policy.
+| Rule | Status | Where enforced |
+| --- | --- | --- |
+| A trace needs at least two primary (measured or converted) points | approved | `MIN_PRIMARY_POINTS`, `trace.too-few-points` |
+| \|Z\| must be > 0 | approved | `trace.impedance-invalid` |
+| A point with neither \|Z\| nor phase is rejected | approved | `trace.point-empty` |
+| ±90° phase rule for passive loads, applied only when `passivity: 'passive'` (warning for `unknown`, off for `not-passive`), with the physical basis stated above | approved, conditions explicit | `trace.phase-out-of-range`, `trace.phase-outside-passive-range` |
+| No uncertainty-based tolerance on the ±90° rule | approved (not introduced) | — |
+| Interpolated points are for display and exploration only | approved | `resampleTrace` note; never an input to any verdict |
 
-## Interpretation — proposals requiring PL decision (not implemented)
+## Evaluation methods — unapproved (recorded, not implemented)
 
-1. Minimum |Z| with the phase at that frequency is descriptive and implemented. Any rule turning it into a verdict (an "equivalent peak dissipation resistance" style figure, or thresholds such as "below 3 Ω is demanding") is an evaluation method and needs PL approval with cited basis and applicability.
-2. Linking a trace to the pairing load card requires amplifier-side data (current capability into low impedance, output vs load, protection behaviour) that the model does not have; the card stays 判定保留 regardless of trace data until such data exist and the combination rule is approved.
-3. Interpolated points are for display only and are never inputs to a verdict; interpolation across a resonance peak is approximate.
+| Item | Status |
+| --- | --- |
+| Load-difficulty assessment from minimum \|Z\|, phase at minimum, or any derived figure (e.g. EPDR-style) or threshold (e.g. "below 3 Ω") | **unapproved** |
+| Amplifier–speaker compatibility or safety judgement from trace data, with or without amplifier data | **unapproved**; the pairing "電気的負荷の適合性" card stays 判定保留 |
+| Use of interpolated or converted points as inputs to any verdict | not allowed |
+
+Any proposal in this area must state basis, scope of applicability, counter-examples, behaviour on missing data and a verification method, and pass PL review before entering evaluation logic.
 
 ## Consequences
 
