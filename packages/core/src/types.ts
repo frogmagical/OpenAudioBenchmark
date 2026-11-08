@@ -23,13 +23,30 @@ export type EvidenceStatus = 'observed' | 'manufacturer' | 'estimated' | 'missin
  * `undefined` means "not recorded", which is itself a reason to flag the pair.
  */
 export interface MeasurementConditions {
-  readonly loadOhms?: number;
-  readonly channelsDriven?: number;
+  /** Test frequency for single-tone figures (Hz). */
+  readonly frequencyHz?: number;
+  /** Measurement bandwidth [low, high] in Hz. */
   readonly bandwidthHz?: readonly [number, number];
-  readonly weighting?: 'A' | 'unweighted' | 'CCIR' | string;
+  /** Load impedance (Ω). */
+  readonly loadOhms?: number;
+  readonly loadType?: 'resistive' | 'reactive' | 'speaker' | 'open';
+  readonly channelsDriven?: number;
+  /** Stimulus description, e.g. "1 kHz sine". */
+  readonly inputSignal?: string;
+  /** Output level at which the figure was taken, e.g. "1 W", "5 W", "rated power". */
   readonly outputLevel?: string;
+  readonly weighting?: 'A' | 'unweighted' | 'CCIR' | 'demo-assumed';
+  readonly environment?: 'anechoic' | 'quasi-anechoic' | 'in-room' | 'bench';
+  /** Named procedure; demo fixtures use `demo-assumed-identical`. */
   readonly method?: string;
 }
+
+/**
+ * The only thing the utility calculation needs from a product: one value
+ * (or `null` for unknown) per metric. `DemoProduct` satisfies this
+ * structurally; the provenance model produces it through `projectMetricValues`.
+ */
+export type MetricValues = Readonly<Record<MetricKey, number | null>>;
 
 /**
  * Fictional demonstration product. `fictional` is a literal `true` so a real

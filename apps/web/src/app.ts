@@ -1,5 +1,6 @@
 /** Wires the six views of the v0.4 workspace onto the static markup in index.html. */
-import { DEMO_PRODUCTS } from '@openaudiobenchmark/core';
+import { PREPARED_DEMO_DATASET } from '@openaudiobenchmark/core';
+import type { PreparedDataset } from '@openaudiobenchmark/core';
 import { qs } from './dom.ts';
 import { initCatalog } from './views/catalog.ts';
 import type { CatalogController } from './views/catalog.ts';
@@ -11,9 +12,9 @@ export interface App {
   readonly catalog: CatalogController;
 }
 
-export function initApp(): App {
-  qs('#nproducts').textContent = String(DEMO_PRODUCTS.length);
-  const catalog = initCatalog(DEMO_PRODUCTS);
+export function initApp(prepared: PreparedDataset = PREPARED_DEMO_DATASET): App {
+  qs('#nproducts').textContent = String(prepared.dataset.products.length);
+  const catalog = initCatalog(prepared);
   initPairing();
   renderMethodologyMeta();
   initNavigation();

@@ -49,8 +49,8 @@ describe('JSON export', () => {
     const parsed = JSON.parse(text);
     expect(text).toBe(JSON.stringify(parsed, null, 2));
     expect(parsed).toEqual({
-      notice: 'FICTIONAL DEMO DATA ONLY', version: '0.3.0', methodologyVersion: '0.5.0-demo',
-      date: '2026-11-08', weights,
+      notice: 'FICTIONAL DEMO DATA ONLY', version: '0.4.0', methodologyVersion: '0.5.0-demo',
+      datasetSchemaVersion: null, date: '2026-11-08', weights,
       products: [{ ...product, computed: {
         score: expect.closeTo(55.4924428138, 8), provisionalScore: expect.closeTo(55.4924428138, 8),
         coverage: 1, usedWeight: 100, totalWeight: 100,
