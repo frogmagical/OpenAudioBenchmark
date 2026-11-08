@@ -4,6 +4,7 @@
  * model and the evaluation; `scoring.ts` never sees a `Measurement`.
  */
 import { METRIC_KEYS } from '../types.ts';
+import { METRIC_IDS } from './types.ts';
 import type { MetricValues } from '../types.ts';
 import { assertUsable } from './prepare.ts';
 import type { PreparedDataset } from './prepare.ts';
@@ -127,14 +128,18 @@ export function projectMetric(input: Dataset | PreparedDataset, productId: strin
   return { metric, measurementId: selected.id, status: selected.status, sourceId: selected.sourceId, derived, issues };
 }
 
+/**
+ * Project every metric the model knows (scoring and speaker metrics alike).
+ * Only `toMetricValues` narrows to the four scoring metrics.
+ */
 export function projectProduct(input: Dataset | PreparedDataset, productId: string): ProductProjection {
   const prepared = assertUsable(input);
-  const metrics = Object.fromEntries(METRIC_KEYS.map((k) => [k, projectMetric(prepared, productId, k)])) as Record<
+  const metrics = Object.fromEntries(METRIC_IDS.map((k) => [k, projectMetric(prepared, productId, k)])) as Record<
     MetricId,
     MetricProjection
   >;
   const productIssues = (prepared.issuesById.get(productId) ?? []).filter((i) => i.severity === 'warning');
-  return { productId, metrics, issues: [...productIssues, ...METRIC_KEYS.flatMap((k) => metrics[k].issues)] };
+  return { productId, metrics, issues: [...productIssues, ...METRIC_IDS.flatMap((k) => metrics[k].issues)] };
 }
 
 /** The scorer's input, straight from a projection. */

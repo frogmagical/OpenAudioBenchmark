@@ -43,6 +43,10 @@ export const FEATURE_LABELS: Readonly<Record<FeatureKey, string>> = {
   bt: 'Bluetooth',
   hp: 'ヘッドホン',
   phono: 'フォノ',
+  optical: '光デジタル',
+  coaxial: '同軸デジタル',
+  subout: 'サブウーファー出力',
+  xlr: 'XLR',
 };
 
 /** Weight presets by usage scenario (raw slider values, not percentages). */

@@ -21,6 +21,9 @@ const speaker: Product = {
   name: 'Demo Speaker（架空）',
   subtitle: '架空',
   features: [],
+  region: null,
+  dimensionsMm: null,
+  massKg: null,
   fictional: true,
 };
 const lab: Source = { ...DEMO_DATASET.sources[0]!, id: 'LAB-T', kind: 'independent-lab' };

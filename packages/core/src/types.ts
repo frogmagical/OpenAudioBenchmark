@@ -4,7 +4,7 @@ import type { METHODOLOGY_VERSION } from './methodology.ts';
 export type MetricKey = 'price' | 'power' | 'thdn' | 'snr';
 export const METRIC_KEYS: readonly MetricKey[] = ['price', 'power', 'thdn', 'snr'];
 
-export type FeatureKey = 'hdmi' | 'usb' | 'bt' | 'hp' | 'phono';
+export type FeatureKey = 'hdmi' | 'usb' | 'bt' | 'hp' | 'phono' | 'optical' | 'coaxial' | 'subout' | 'xlr';
 
 export type PresetKey = 'balanced' | 'near' | 'power' | 'budget';
 
@@ -39,6 +39,20 @@ export interface MeasurementConditions {
   readonly environment?: 'anechoic' | 'quasi-anechoic' | 'in-room' | 'bench';
   /** Named procedure; demo fixtures use `demo-assumed-identical`. */
   readonly method?: string;
+  /** Measurement instrument, e.g. "Audio Precision APx555", "Klippel NFS" (schema 1.1, G4). A comparison condition, never a blanket scoring-eligibility condition (D-03). */
+  readonly instrument?: string;
+  /** Test signal, e.g. "1 kHz sine, continuous", "burst" (G4). */
+  readonly testSignal?: string;
+  /** Averaging method for sensitivity, e.g. "spot", "mean", "IEC", "Listening Window" (G4, P8). */
+  readonly averaging?: string;
+  /** Frequency band the sensitivity was averaged over, [low, high] Hz; `[f, f]` for a spot value (P8). */
+  readonly averagingBandHz?: readonly [number, number];
+  /** Distortion criterion a rated power refers to, e.g. "THD+N 1 %" (G6). */
+  readonly distortionCriterion?: string;
+  /** Reference of a sensitivity figure. Structured on purpose: never inferred from free text (D-06). */
+  readonly sensitivityReference?: '2.83V/1m' | '1W/1m';
+  /** Measurement distance in metres (sensitivity, response). */
+  readonly distanceM?: number;
 }
 
 /**

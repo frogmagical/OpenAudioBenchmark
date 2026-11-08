@@ -139,9 +139,11 @@ describe('catalog', () => {
     const a = records().find((r) => r.dataset['productId'] === 'a')!;
     expect(a.querySelector('.provenance li[data-metric="power"]')!.textContent).toContain('第三者測定');
     expect(a.querySelector('.provenance li[data-metric="price"]')!.textContent).toContain('メーカー公称');
+    // Schema 1.1: power also lacks its distortion criterion in the demo → three unrecorded-condition warnings.
     const issues = Array.from(a.querySelectorAll<HTMLElement>('.quality-issues li')).map((li) => li.dataset['issue']);
-    expect(issues).toEqual(['measurement.required-condition-unrecorded', 'measurement.required-condition-unrecorded']);
+    expect(issues).toEqual(['measurement.required-condition-unrecorded', 'measurement.required-condition-unrecorded', 'measurement.required-condition-unrecorded']);
     expect(a.querySelector('.quality-issues')!.textContent).toContain('outputLevel');
+    expect(a.querySelector('.quality-issues')!.textContent).toContain('歪み基準');
   });
 
   it('filters by budget, required features and third-party verification', () => {
@@ -304,7 +306,13 @@ describe('catalog', () => {
 
 describe('catalog with another prepared dataset', () => {
   it('forwards the dataset to the comparison and derives every number from it', () => {
-    const full = { ...DEMO_DATASET.measurements[0]!.conditions, outputLevel: '1 W', weighting: 'A' as const };
+    const full = {
+      ...DEMO_DATASET.measurements[0]!.conditions,
+      outputLevel: '1 W',
+      weighting: 'A' as const,
+      distortionCriterion: 'THD+N 1 %',
+      instrument: 'Demo Analyzer（架空）',
+    };
     const ds: Dataset = {
       ...DEMO_DATASET,
       measurements: DEMO_DATASET.measurements.map((m) => ({
@@ -338,7 +346,7 @@ describe('catalog with another prepared dataset', () => {
       products: { id: string; provenance: Record<string, { measurementId: string | null; status: string; steps: { op: string }[] }> }[];
     };
     expect(json.version).toBe('0.4.0');
-    expect(json.datasetSchemaVersion).toBe('1.0');
+    expect(json.datasetSchemaVersion).toBe('1.1');
     const a = json.products.find((p) => p.id === 'a')!;
     expect(a.provenance['power']!.measurementId).toBe('m-a-power');
     expect(a.provenance['power']!.steps.map((s) => s.op)).toEqual(['select-measurement', 'unit-convert', 'normalize']);
@@ -472,7 +480,8 @@ describe('sources and evidence view', () => {
   it('summarises the quality warnings by code with counts', () => {
     const rows = Array.from(document.querySelectorAll<HTMLElement>('#issuesTable tbody tr'));
     const byCode = Object.fromEntries(rows.map((r) => [r.dataset['issueCode'], Number(r.querySelector('.issue-count')!.textContent)]));
-    expect(byCode).toEqual({ 'measurement.required-condition-unrecorded': 10, 'source.url-missing': 7 });
+    // Schema 1.1: 6 power (distortion criterion) + 5 THD+N + 5 S/N unrecorded conditions; 7 sources without URL.
+    expect(byCode).toEqual({ 'measurement.required-condition-unrecorded': 16, 'source.url-missing': 7 });
     expect(el('#sources .demo-label').textContent).toBe('DEMO DATA');
   });
 

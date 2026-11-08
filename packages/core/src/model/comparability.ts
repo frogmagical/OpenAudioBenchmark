@@ -3,7 +3,7 @@
  * Pure explanation using metric-relevant conditions and recorded finite values.
  */
 import { compareConditions } from '../conditions.ts';
-import { CONDITION_LABELS, formatConditionValue, RELEVANT_CONDITIONS, STATUS_LABELS, unrecordedRequiredConditions } from './rules.ts';
+import { COMPARISON_REQUIRED_CONDITIONS, CONDITION_LABELS, formatConditionValue, RELEVANT_CONDITIONS, STATUS_LABELS, unrecordedRequiredConditions } from './rules.ts';
 import type { Measurement } from './types.ts';
 import { toCanonicalUnit } from './units.ts';
 
@@ -33,7 +33,9 @@ export interface Comparability {
  *   Missing/non-finite values are never probed with a substitute value.
  * - `conditions.mismatch`: relevant conditions differ; details = mismatched keys, message =
  *   Japanese labels and both recorded values (or 未記録).
- * - `conditions.unrecorded`: a required relevant condition is undefined on either side;
+ * - `conditions.unrecorded`: a required relevant condition (`REQUIRED_CONDITIONS`) **or a
+ *   comparison-required condition (`COMPARISON_REQUIRED_CONDITIONS`, e.g. the instrument — D-03)**
+ *   is undefined on either side;
  *   details = keys, message = Japanese labels. Both condition rules are skipped for different
  *   metrics. Price has no relevant conditions and is never blocked by condition rules.
  *
@@ -76,9 +78,11 @@ export function explainComparability(a: Measurement, b: Measurement): Comparabil
         `${CONDITION_LABELS[key]}が ${formatConditionValue(key, a.conditions)} と ${formatConditionValue(key, b.conditions)} で異なる`);
       add('conditions.mismatch', `${differences.join('、')}ため直接比較できません`, conditions.mismatches);
     }
+    const comparisonRequired = COMPARISON_REQUIRED_CONDITIONS[a.metric];
     const unrecorded = [...new Set([
       ...unrecordedRequiredConditions(a.metric, a.conditions),
       ...unrecordedRequiredConditions(b.metric, b.conditions),
+      ...comparisonRequired.filter((key) => a.conditions[key] === undefined || b.conditions[key] === undefined),
     ])].filter((key) => relevant.includes(key));
     if (unrecorded.length > 0) {
       add('conditions.unrecorded', `比較に必要な測定条件が未記録です: ${unrecorded.map((key) => CONDITION_LABELS[key]).join('、')}`, unrecorded);

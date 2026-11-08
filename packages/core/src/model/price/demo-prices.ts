@@ -6,6 +6,8 @@ import type { ExchangeRate, PriceObservation } from './types.ts';
 export const DEMO_PRICE_SOURCES: Source[] = ['001', '002'].map((suffix) => ({
   id: `DEMO-RETAIL-${suffix}`, publisher: `Demo Retail ${suffix}（架空）`, kind: 'retailer',
   url: null, publishedAt: null, accessedAt: '2026-11-08', license: null, archiveRef: null,
+  tier: 'primary',
+  reuse: { quoteFacts: 'allowed', reproduceFigures: 'allowed', storeRawData: 'allowed', redistribute: 'allowed', basis: 'fictional demonstration data authored by this project', checkedAt: '2026-11-08' },
   notes: 'FICTIONAL / 架空の販売店資料。価格・条件・参考為替レートは動作確認専用であり、実際の取引には使えません。',
 }));
 

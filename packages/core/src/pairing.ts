@@ -22,7 +22,7 @@ import type { DemoAmp, DemoSpeaker, PairingInput, PairingResult, PairingVerdict,
 /**
  * Convert a sensitivity figure to dB @ 1 W / 1 m for the given nominal load.
  * - `1W/1m` → returned unchanged.
- * - `2.83V/1m` → by convention 2.83 V ≙ 1 W into 8 Ω (2.83² = 8.0089 W, a 0.005 dB difference that is
+ * - `2.83V/1m` → by convention 2.83 V ≙ 1 W into 8 Ω ((2.83 V)² = 8.0089 V², i.e. ≈ 1.0011 W into 8 Ω, a 0.005 dB difference that is
  *   ignored), i.e. 8/Z watts into Z ohms, so
  *   `S(1W) = S(2.83V) − 10·log10(8 / nominalOhms)`; identical only for 8 Ω
  *   (4 Ω: −3.01 dB, 16 Ω: +3.01 dB).

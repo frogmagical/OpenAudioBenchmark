@@ -11,12 +11,57 @@
  */
 import type { EvidenceStatus, FeatureKey, MeasurementConditions, MetricKey } from '../types.ts';
 
-/** Metrics the model knows. Reuses the Phase 1 keys so the scorer needs no mapping. */
-export type MetricId = MetricKey;
+/**
+ * Speaker metrics (schema 1.1, G1). Recorded with full provenance like any
+ * measurement but **never fed to the utility score**: `MetricKey` (the four
+ * scoring metrics) stays separate and `METRIC_KEYS` keeps four entries.
+ */
+export type SpeakerMetricId = 'sensitivity' | 'nominalImpedance' | 'minimumImpedance' | 'crossoverFrequency';
+export const SPEAKER_METRIC_IDS: readonly SpeakerMetricId[] = ['sensitivity', 'nominalImpedance', 'minimumImpedance', 'crossoverFrequency'];
 
-export type Unit = 'JPY' | 'W' | '%' | 'dB' | 'Ω' | 'deg';
+/** Every metric the data model can hold. Scoring uses the `MetricKey` subset only. */
+export type MetricId = MetricKey | SpeakerMetricId;
+export const METRIC_IDS: readonly MetricId[] = ['price', 'power', 'thdn', 'snr', ...SPEAKER_METRIC_IDS];
 
-export const DATASET_SCHEMA_VERSION = '1.0' as const;
+export function isScoringMetric(metric: MetricId): metric is MetricKey {
+  return metric === 'price' || metric === 'power' || metric === 'thdn' || metric === 'snr';
+}
+
+export type Unit = 'JPY' | 'W' | '%' | 'dB' | 'Ω' | 'deg' | 'Hz';
+
+/** 1.1 (ADR-0004 rev., Phase 3): speaker metrics, Source.tier/reuse, MeasurementReference, RangeMeasurement, product attributes, structured conditions. */
+export const DATASET_SCHEMA_VERSION = '1.1' as const;
+
+/** Whether numbers from a source may be quoted / stored / redistributed. Never defaults to permitted. */
+export type ReusePermission = 'allowed' | 'allowed-with-attribution' | 'permitted-by-law-or-terms' | 'unknown' | 'prohibited';
+
+/**
+ * Rights metadata of a source (G3). `quoteFacts` governs whether a numeric
+ * `Measurement` may cite the source at all in a non-fictional dataset;
+ * figures, raw data and redistribution are tracked separately (D-15).
+ */
+export interface SourceReuse {
+  readonly quoteFacts: ReusePermission;
+  readonly reproduceFigures: ReusePermission;
+  readonly storeRawData: ReusePermission;
+  readonly redistribute: ReusePermission;
+  /** Terms URL, correspondence reference or legal basis; null when unchecked. */
+  readonly basis: string | null;
+  /** Date the permissions were checked (YYYY-MM-DD); null when unchecked. */
+  readonly checkedAt: string | null;
+}
+
+export const REUSE_UNCHECKED: SourceReuse = {
+  quoteFacts: 'unknown',
+  reproduceFigures: 'unknown',
+  storeRawData: 'unknown',
+  redistribute: 'unknown',
+  basis: null,
+  checkedAt: null,
+};
+
+/** Permissions under which a numeric Measurement may cite a source in a non-fictional dataset. */
+export const NUMBER_STORAGE_PERMITTED: readonly ReusePermission[] = ['allowed', 'allowed-with-attribution', 'permitted-by-law-or-terms'];
 
 export type SourceKind = 'independent-lab' | 'manufacturer' | 'retailer' | 'editorial' | 'other';
 
@@ -34,6 +79,9 @@ export interface Source {
   readonly notes: string | null;
   /** Archive or reference identifier (e.g. Wayback snapshot), if any. */
   readonly archiveRef: string | null;
+  /** Primary (manufacturer, the measuring lab itself) or secondary (re-publication, summary). */
+  readonly tier: 'primary' | 'secondary';
+  readonly reuse: SourceReuse;
 }
 
 export type MeasurementStatus = EvidenceStatus;
@@ -79,7 +127,52 @@ export interface Product {
   readonly name: string;
   readonly subtitle: string;
   readonly features: readonly FeatureKey[];
+  /** Market / regional variant the record describes (e.g. "JP", "EU"); null when not region-specific or unknown (G7). */
+  readonly region: string | null;
+  /** Manufacturer-stated dimensions in mm (W × H × D) and mass in kg; null when unknown (G7). */
+  readonly dimensionsMm: { readonly w: number; readonly h: number; readonly d: number } | null;
+  readonly massKg: number | null;
   readonly fictional: boolean;
+}
+
+/**
+ * A figure that exists at a source but whose value is deliberately **not**
+ * stored (rights unconfirmed, third-party measurement kept as location only —
+ * D-16, P7, G5). Distinct from `missing`: something was measured, we point to
+ * it. Never projected, never scored.
+ */
+export interface MeasurementReference {
+  readonly id: string;
+  readonly productId: string;
+  readonly metric: MetricId;
+  readonly sourceId: string;
+  /** What the source reports, as words (e.g. "sensitivity, impedance magnitude and phase"). No numbers. */
+  readonly quantities: readonly string[];
+  readonly conditions: MeasurementConditions;
+  readonly status: Exclude<MeasurementStatus, 'missing'>;
+  readonly accessedAt: string;
+  readonly notes: string | null;
+}
+
+/**
+ * A manufacturer-style range specification such as "47 Hz – 45 kHz (−6 dB)",
+ * kept as one record with its tolerance and conditions (D-07). Display only.
+ */
+export interface RangeMeasurement {
+  readonly id: string;
+  readonly productId: string;
+  readonly metric: 'frequencyRange';
+  readonly lowHz: number;
+  readonly highHz: number;
+  /** Tolerance the range is stated at, in dB (e.g. -6, or ±3 recorded as 3 with `toleranceKind: 'plus-minus'`). */
+  readonly toleranceDb: number;
+  readonly toleranceKind: 'plus-minus' | 'minus';
+  readonly status: Exclude<MeasurementStatus, 'missing'>;
+  readonly sourceId: string;
+  readonly conditions: MeasurementConditions;
+  readonly capturedAt: string | null;
+  readonly version: number;
+  readonly notes: string | null;
 }
 
 export interface Dataset {
@@ -89,6 +182,10 @@ export interface Dataset {
   readonly products: readonly Product[];
   readonly sources: readonly Source[];
   readonly measurements: readonly Measurement[];
+  /** Value-less pointers to figures held elsewhere (G5). Optional for backward compatibility of in-memory construction. */
+  readonly references?: readonly MeasurementReference[];
+  /** Range specifications (D-07). */
+  readonly ranges?: readonly RangeMeasurement[];
 }
 
 /** Data-quality finding produced by `validateDataset` or a projection. */

@@ -1,16 +1,18 @@
 # Data model
 
-Implemented in `packages/core/src/model/` (dataset schema `1.0`, ADR-0004). Strongly typed, immutable records; derived values carry lineage.
+Implemented in `packages/core/src/model/` (dataset schema `1.1`, ADR-0004 and its 1.1 revision). Strongly typed, immutable records; derived values carry lineage.
 
 ## Entities
 
 | Entity | Purpose | Key fields |
 | --- | --- | --- |
-| `Product` | Identity only | id, maker, model, revision, category, name, subtitle, features, fictional |
-| `Source` | Where a figure comes from | id, publisher, kind (independent-lab / manufacturer / retailer / editorial / other), url, publishedAt, accessedAt, license, notes, archiveRef |
-| `Measurement` | One figure | id, productId, metric, value \| null, unit, status, sourceId, conditions, uncertainty \| null, derivation, capturedAt, version, notes |
-| `MeasurementConditions` | How it was measured | frequencyHz, bandwidthHz, loadOhms, loadType, channelsDriven, inputSignal, outputLevel, weighting, environment, method |
-| `Dataset` | A validated bundle | schemaVersion, fictional, products, sources, measurements |
+| `Product` | Identity and stated attributes | id, maker, model, revision, category, name, subtitle, features, region, dimensionsMm, massKg, fictional |
+| `Source` | Where a figure comes from and what may be reused | id, publisher, kind (independent-lab / manufacturer / retailer / editorial / other), tier (primary / secondary), url, publishedAt, accessedAt, license, notes, archiveRef, reuse {quoteFacts, reproduceFigures, storeRawData, redistribute, basis, checkedAt} |
+| `Measurement` | One figure | id, productId, metric (`MetricId`: price, power, thdn, snr, sensitivity, nominalImpedance, minimumImpedance, crossoverFrequency), value \| null, unit, status, sourceId, conditions, uncertainty \| null, derivation, capturedAt, version, notes |
+| `MeasurementReference` | A figure that exists at a source but whose value is not stored (rights unconfirmed, third-party measurement kept as location only) | id, productId, metric, sourceId, quantities (words, no digits), conditions, status, accessedAt, notes |
+| `RangeMeasurement` | A range specification such as "47 Hz – 45 kHz (−6 dB)" | id, productId, metric `frequencyRange`, lowHz, highHz, toleranceDb, toleranceKind, status, sourceId, conditions, capturedAt, version |
+| `MeasurementConditions` | How it was measured | frequencyHz, bandwidthHz, loadOhms, loadType, channelsDriven, inputSignal, outputLevel, weighting, environment, method, instrument, testSignal, averaging, averagingBandHz, distortionCriterion, sensitivityReference, distanceM |
+| `Dataset` | A validated bundle | schemaVersion (`1.1`), fictional, products, sources, measurements, references?, ranges? |
 
 Additional record types:
 
@@ -60,7 +62,10 @@ Unknown uncertainty is `null`. An uncertainty of 0 is a validation error.
 - Condition relevance: `RELEVANT_CONDITIONS[metric]` limits mismatch checks to the keys that matter for that metric (none for price).
 - `explainComparability(a, b)` → level `comparable` / `comparable-with-caveats` / `not-comparable` with all applicable reasons (metric differs, value missing or non-finite, unit not convertible, relevant condition mismatch — naming each key with both values — or required condition unrecorded; evidence tier differs, estimated, unit converted, uncertainty unstated). `explainMetricComparability(prepared, productA, productB, metric)` applies it to the records two products actually use and treats an absent record exactly like an explicit `missing` one.
 - `evaluateProduct(prepared, productId, weights)` returns the projection, the scorer input, the utility result and, per metric, the full lineage including the `normalize` step. The JSON export (`buildCatalogJson(..., { dataset })`, format 0.4.0) publishes this chain as `provenance`.
-- `REQUIRED_CONDITIONS` per metric: power → loadOhms, channelsDriven, bandwidthHz; THD+N → loadOhms, outputLevel, bandwidthHz; S/N → weighting, outputLevel; price → none.
+- `REQUIRED_CONDITIONS` per metric (scoring eligibility and "unrecorded" warnings): power → loadOhms, channelsDriven, bandwidthHz, distortionCriterion; THD+N → loadOhms, outputLevel, bandwidthHz; S/N → weighting, outputLevel; price → none; sensitivity → sensitivityReference, distanceM, averaging, averagingBandHz, environment; minimumImpedance → frequencyHz; nominalImpedance / crossoverFrequency → none.
+- `COMPARISON_REQUIRED_CONDITIONS` (comparison only, never eligibility — D-03): `instrument` for power, THD+N, S/N, sensitivity and minimum impedance. Unrecorded on either side → `conditions.unrecorded`.
+- `METRIC_CATEGORIES`: amplifier metrics only on amplifiers, speaker metrics only on speakers, price on any category.
+- Rights (D-15): in a non-fictional dataset a numeric `Measurement` may cite a source only when `reuse.quoteFacts` is `allowed`, `allowed-with-attribution` or `permitted-by-law-or-terms`; `unknown` / `prohibited` sources can only be referenced through `MeasurementReference`. Publication is a separate approval.
 
 ## Licensing
 

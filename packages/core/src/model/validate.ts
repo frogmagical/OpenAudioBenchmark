@@ -4,8 +4,8 @@
  */
 import { compareConditions } from '../conditions.ts';
 import { isCalendarDate, isInvalidUncertainty, isZeroUncertainty } from './common.ts';
-import { isValueInDomain, METRIC_UNITS, RELEVANT_CONDITIONS, unrecordedConditionsMessage, unrecordedRequiredConditions, VALUE_DOMAIN } from './rules.ts';
-import { DATASET_SCHEMA_VERSION } from './types.ts';
+import { isValueInDomain, METRIC_CATEGORIES, METRIC_UNITS, RELEVANT_CONDITIONS, unrecordedConditionsMessage, unrecordedRequiredConditions, VALUE_DOMAIN } from './rules.ts';
+import { DATASET_SCHEMA_VERSION, NUMBER_STORAGE_PERMITTED } from './types.ts';
 import type { Dataset, Measurement, QualityIssue, Source } from './types.ts';
 
 
@@ -27,6 +27,15 @@ import type { Dataset, Measurement, QualityIssue, Source } from './types.ts';
  * - `measurement.source-required`: non-missing status with `sourceId === null`.
  * - `measurement.source-forbidden`: `status === 'missing'` with a `sourceId` (nothing was measured, so nothing is cited).
  * - `measurement.unit-not-accepted`: `unit` not in `METRIC_UNITS[metric].accepted`.
+ * - `measurement.metric-category-mismatch`: metric not allowed for the product's category (`METRIC_CATEGORIES`).
+ * - `measurement.source-reuse-not-permitted` (non-fictional datasets only): a numeric measurement cites a source whose
+ *   `reuse.quoteFacts` is not in `NUMBER_STORAGE_PERMITTED` (D-15: unknown/prohibited → `MeasurementReference` only).
+ * - `source.reuse-checked-at-invalid`: `reuse.checkedAt` not a calendar date; `source.reuse-basis-required`: a permission
+ *   other than `unknown` without `basis`.
+ * - `reference.*`: `MeasurementReference` rules — duplicate/empty id, unknown product/source, metric-category mismatch,
+ *   empty `quantities` or a quantity containing digits (values must not leak into references), invalid `accessedAt`.
+ * - `range.*`: `RangeMeasurement` rules — duplicate/empty id, unknown product/source, speaker-only, `lowHz`/`highHz` finite
+ *   positive with low < high, `toleranceDb` finite (≤ 0 for `minus`, > 0 for `plus-minus`), version, dates, source kind.
  * - `measurement.derivation-required`: `status === 'estimated'` with `derivation` null or blank (whitespace only).
  * - `measurement.derivation-forbidden`: `derivation !== null` on a non-estimated status.
  * - `measurement.uncertainty-zero`: any uncertainty whose magnitude is 0 (or range with low === high)
@@ -64,6 +73,7 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     issues.push({ code, severity, path, message, relatedIds });
   };
   const productIds = new Set(dataset.products.map((product) => product.id));
+  const productsById = new Map(dataset.products.map((product) => [product.id, product]));
   const sources = new Map<string, Source>();
   const duplicateSourceIds = new Set<string>();
   const measuredProducts = new Set(dataset.measurements.map((measurement) => measurement.productId));
@@ -107,6 +117,13 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     if (source.publishedAt !== null && !isCalendarDate(source.publishedAt)) {
       add('source.published-at-invalid', 'error', path, '出典の公開日は実在する日付を YYYY-MM-DD 形式で記録してください', [source.id]);
     }
+    if (source.reuse.checkedAt !== null && !isCalendarDate(source.reuse.checkedAt)) {
+      add('source.reuse-checked-at-invalid', 'error', path, '利用許諾の確認日は実在する日付を YYYY-MM-DD 形式で記録してください', [source.id]);
+    }
+    const permissions = [source.reuse.quoteFacts, source.reuse.reproduceFigures, source.reuse.storeRawData, source.reuse.redistribute];
+    if (permissions.some((p) => p !== 'unknown') && (source.reuse.basis === null || source.reuse.basis.trim() === '')) {
+      add('source.reuse-basis-required', 'error', path, '利用許諾を unknown 以外に設定する場合は根拠(規約 URL・確認記録等)が必要です', [source.id]);
+    }
     if ((source.url === null || source.url.trim() === '') && citedSources.has(source.id)) {
       add('source.url-missing', dataset.fictional ? 'warning' : 'error', path, '第三者測定またはメーカー公称値が参照する出典の URL が未記録です', [source.id]);
     }
@@ -147,6 +164,17 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     if (status !== 'missing' && sourceId === null) error('measurement.source-required', '未測定以外の測定には出典が必要です');
     if (status === 'missing' && sourceId !== null) error('measurement.source-forbidden', '未測定のレコードに出典は設定できません');
     if (!METRIC_UNITS[metric].accepted.includes(unit)) error('measurement.unit-not-accepted', `${metric} の単位 ${unit} は対応していません`);
+    const owner = productsById.get(productId);
+    if (owner && !METRIC_CATEGORIES[metric].includes(owner.category)) {
+      error('measurement.metric-category-mismatch', `${metric} は ${owner.category} の製品には記録できません`, [id, productId]);
+    }
+    if (!dataset.fictional && value !== null && sourceId !== null) {
+      const citedSource = sources.get(sourceId);
+      if (citedSource && !NUMBER_STORAGE_PERMITTED.includes(citedSource.reuse.quoteFacts)) {
+        error('measurement.source-reuse-not-permitted',
+          `出典 ${sourceId} の数値引用許諾が ${citedSource.reuse.quoteFacts} のため、数値を持つ測定として保存できません(MeasurementReference を使用)`, [id, sourceId]);
+      }
+    }
     if (status === 'estimated' && (derivation === null || derivation.trim() === '')) {
       error('measurement.derivation-required', '推定値には導出方法の記録が必要です');
     }
@@ -196,6 +224,46 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
       byMetric.set(metric, previous);
       previousByProduct.set(productId, byMetric);
     }
+  });
+  const seenReferences = new Set<string>();
+  (dataset.references ?? []).forEach((ref, index) => {
+    const path = `references[${index}]`;
+    const error = (code: string, message: string, relatedIds = [ref.id]) => add(code, 'error', path, message, relatedIds);
+    if (ref.id.trim() === '') error('reference.id-empty', '測定参照の識別子は空にできません');
+    if (seenReferences.has(ref.id) || seenMeasurements.has(ref.id)) error('reference.duplicate-id', '測定参照の識別子が重複しています');
+    seenReferences.add(ref.id);
+    const owner = productsById.get(ref.productId);
+    if (!owner) error('reference.unknown-product', '参照先の製品が見つかりません', [ref.id, ref.productId]);
+    else if (!METRIC_CATEGORIES[ref.metric].includes(owner.category)) error('reference.metric-category-mismatch', `${ref.metric} は ${owner.category} の製品には記録できません`, [ref.id, ref.productId]);
+    if (!sources.has(ref.sourceId)) error('reference.unknown-source', '参照先の出典が見つかりません', [ref.id, ref.sourceId]);
+    if (ref.quantities.length === 0 || ref.quantities.some((q) => q.trim() === '')) error('reference.quantities-empty', '測定参照には何が測定されているかを言葉で記録してください');
+    if (ref.quantities.some((q) => /\d/.test(q))) error('reference.quantities-contain-digits', '測定参照の quantities に数値を含めてはいけません(値は転記しない)');
+    if (!isCalendarDate(ref.accessedAt)) error('reference.accessed-at-invalid', '測定参照の取得日は実在する日付を YYYY-MM-DD 形式で記録してください');
+  });
+
+  const seenRanges = new Set<string>();
+  (dataset.ranges ?? []).forEach((range, index) => {
+    const path = `ranges[${index}]`;
+    const error = (code: string, message: string, relatedIds = [range.id]) => add(code, 'error', path, message, relatedIds);
+    if (range.id.trim() === '') error('range.id-empty', '範囲レコードの識別子は空にできません');
+    if (seenRanges.has(range.id) || seenMeasurements.has(range.id)) error('range.duplicate-id', '範囲レコードの識別子が重複しています');
+    seenRanges.add(range.id);
+    const owner = productsById.get(range.productId);
+    if (!owner) error('range.unknown-product', '参照先の製品が見つかりません', [range.id, range.productId]);
+    else if (owner.category !== 'speaker') error('range.product-not-speaker', '周波数範囲はスピーカーにのみ記録できます', [range.id, range.productId]);
+    const rangeSource = sources.get(range.sourceId);
+    if (!rangeSource) error('range.unknown-source', '参照先の出典が見つかりません', [range.id, range.sourceId]);
+    else if ((range.status === 'observed' && rangeSource.kind === 'manufacturer') || (range.status === 'manufacturer' && rangeSource.kind === 'independent-lab')) {
+      error('range.status-source-kind-conflict', '範囲レコードの証拠種別と出典の種別が矛盾しています', [range.id, rangeSource.id]);
+    }
+    if (!Number.isFinite(range.lowHz) || !Number.isFinite(range.highHz) || range.lowHz <= 0 || range.lowHz >= range.highHz) {
+      error('range.bounds-invalid', '周波数範囲は 0 < low < high の有限値(Hz)で記録してください');
+    }
+    if (!Number.isFinite(range.toleranceDb) || (range.toleranceKind === 'minus' ? range.toleranceDb > 0 : range.toleranceDb <= 0)) {
+      error('range.tolerance-invalid', '許容差は minus なら 0 以下(例 -6)、plus-minus なら正の値(例 3)で記録してください');
+    }
+    if (!Number.isInteger(range.version) || range.version <= 0) error('range.version-invalid', '範囲レコードの版は正の整数でなければなりません');
+    if (range.capturedAt !== null && !isCalendarDate(range.capturedAt)) error('range.captured-at-invalid', '測定日は YYYY-MM-DD 形式の実在する日付で記録してください');
   });
   return issues;
 }
