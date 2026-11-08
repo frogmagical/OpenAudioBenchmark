@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEMO_DATASET,
-  MIN_MEASURED_POINTS,
+  MIN_PRIMARY_POINTS,
   PHASE_RANGE_DEG,
   areTracesUsable,
   interpolatePoint,
@@ -32,6 +32,7 @@ const pt = (frequencyHz: number, impedanceOhms: number | null, phaseDeg: number 
   phaseDeg,
   kind,
   derivedFrom,
+  conversion: kind === 'converted' ? { from: 'radians', method: 'deg = rad × 180/π', originalRecordId: null } : null,
 });
 
 /** Fictional, physically plausible shape: bass resonance peak, minimum in the midrange, inductive rise. */
@@ -41,10 +42,11 @@ const base: SpeakerElectricalTrace = {
   revision: 'rev-A',
   sourceId: 'LAB-T',
   status: 'observed',
+  passivity: 'passive',
   method: { technique: 'constant-current sweep', driveLevel: '0.5 V', senseResistorOhms: 100, sweep: 'log, 1/24 oct' },
   conditions: { environment: 'bench', method: 'ports open, 23 °C' },
   points: [pt(20, 6.5, 20), pt(50, 24, 0), pt(100, 9, -30), pt(200, 4.2, -15), pt(1000, 5.1, 10), pt(10000, 12, 45), pt(20000, 20, 60)],
-  impedanceUncertainty: { type: 'relative', plusMinusPercent: 2 },
+  impedanceUncertainty: { type: 'absolute', plusMinus: 0.2, unit: 'Ω' },
   phaseUncertaintyDeg: 2,
   capturedAt: '2026-11-01',
   derivation: null,
@@ -63,10 +65,11 @@ describe('validateTraces', () => {
   });
 
   it.each([
-    [-90, true], [90, true], [-90.01, false], [90.01, false], [NaN, false], [Infinity, false],
-  ])('phase %s° within the passive range is %s', (phase, ok) => {
+    [-90, []], [90, []], [-90.01, ['trace.phase-out-of-range']], [90.01, ['trace.phase-out-of-range']],
+    [NaN, ['trace.phase-invalid']], [Infinity, ['trace.phase-invalid']],
+  ])('phase %s° on a passive trace yields %j', (phase, expected) => {
     const t = { ...base, points: base.points.map((p, i) => (i === 2 ? { ...p, phaseDeg: phase } : p)) };
-    expect(errors(t).includes('trace.phase-out-of-range')).toBe(!ok);
+    expect(errors(t)).toEqual(expected);
     expect(PHASE_RANGE_DEG).toEqual({ min: -90, max: 90 });
   });
 
@@ -87,19 +90,71 @@ describe('validateTraces', () => {
     expect(errors({ ...base, points: base.points.map((p, i) => (i === 3 ? { ...p, impedanceOhms: null, phaseDeg: null } : p)) })).toEqual(['trace.point-empty']);
   });
 
-  it('requires at least two measured points', () => {
-    expect(MIN_MEASURED_POINTS).toBe(2);
+  it('requires at least two primary (measured or converted) points', () => {
+    expect(MIN_PRIMARY_POINTS).toBe(2);
     expect(errors({ ...base, points: [pt(1000, 8, 0)] })).toEqual(['trace.too-few-points']);
     expect(errors({ ...base, points: [pt(100, 8, 0), pt(1000, 8, 0)] })).toEqual([]);
-    expect(errors({ ...base, points: [pt(100, 8, 0), pt(1000, 8, 0, 'interpolated', [100])] })).toEqual(['trace.too-few-points']);
+    expect(errors({ ...base, points: [pt(100, 8, 0), pt(1000, 8, 0, 'converted')] })).toEqual([]);
+    expect(errors({ ...base, points: [pt(100, 8, 0), pt(1000, 8, 0, 'interpolated', [1000])] })).toEqual(['trace.too-few-points', 'trace.derived-from-invalid']);
   });
 
-  it('checks derived points reference measured frequencies and measured points carry none', () => {
+  it('interpolated points must be bracketed by adjacent primary points', () => {
     const withInterp = { ...base, points: [...base.points.slice(0, 2), pt(70, 15, -10, 'interpolated', [50, 100]), ...base.points.slice(2)] };
     expect(errors(withInterp)).toEqual([]);
-    expect(errors({ ...withInterp, points: withInterp.points.map((p) => (p.kind === 'interpolated' ? { ...p, derivedFrom: [50, 75] } : p)) })).toEqual(['trace.derived-from-unknown']);
+    const relabel = (d: number[]) => errors({ ...withInterp, points: withInterp.points.map((p) => (p.kind === 'interpolated' ? { ...p, derivedFrom: d } : p)) });
+    expect(relabel([50, 75])).toEqual(['trace.derived-from-invalid']); // 75 is not a primary point
+    expect(relabel([100, 50])).toEqual(['trace.derived-from-invalid']); // reversed
+    expect(relabel([50, 50])).toEqual(['trace.derived-from-invalid']); // duplicate ancestry
+    expect(relabel([20, 100])).toEqual(['trace.derived-from-invalid']); // not adjacent (50 lies between)
+    expect(relabel([100, 200])).toEqual(['trace.derived-from-invalid']); // does not bracket 70 Hz
     expect(errors({ ...withInterp, points: withInterp.points.map((p) => (p.kind === 'interpolated' ? { ...p, derivedFrom: null } : p)) })).toEqual(['trace.derived-from-required']);
     expect(errors({ ...base, points: base.points.map((p, i) => (i === 0 ? { ...p, derivedFrom: [20] } : p)) })).toEqual(['trace.derived-from-forbidden']);
+    // Extrapolated "interpolated" points outside the primary range are rejected.
+    expect(errors({ ...base, points: [pt(10, 7, 10, 'interpolated', [20, 50]), ...base.points] })).toEqual(['trace.derived-from-invalid']);
+    expect(errors({ ...base, points: [...base.points, pt(30000, 25, 65, 'interpolated', [10000, 20000])] })).toEqual(['trace.derived-from-invalid']);
+  });
+
+  it('converted points keep the frequency and carry conversion metadata, never derivedFrom', () => {
+    const converted = { ...base, points: base.points.map((p, i) => (i === 4 ? { ...p, kind: 'converted' as const, conversion: { from: 'radians', method: 'deg = rad × 180/π', originalRecordId: 'fig-3' } } : p)) };
+    expect(errors(converted)).toEqual([]);
+    expect(errors({ ...converted, points: converted.points.map((p) => (p.kind === 'converted' ? { ...p, conversion: null } : p)) })).toEqual(['trace.conversion-required']);
+    expect(errors({ ...converted, points: converted.points.map((p) => (p.kind === 'converted' ? { ...p, conversion: { from: ' ', method: 'x', originalRecordId: null } } : p)) })).toEqual(['trace.conversion-blank']);
+    expect(errors({ ...converted, points: converted.points.map((p) => (p.kind === 'converted' ? { ...p, derivedFrom: [1000] } : p)) })).toEqual(['trace.derived-from-forbidden']);
+    expect(errors({ ...base, points: base.points.map((p, i) => (i === 0 ? { ...p, conversion: { from: 'x', method: 'y', originalRecordId: null } } : p)) })).toEqual(['trace.conversion-forbidden']);
+  });
+
+  it('applies the ±90° rule only to declared-passive traces', () => {
+    const beyond = (passivity: SpeakerElectricalTrace['passivity']) => ({ ...base, passivity, points: base.points.map((p, i) => (i === 2 ? { ...p, phaseDeg: 95 } : p)) });
+    expect(errors(beyond('passive'))).toEqual(['trace.phase-out-of-range']);
+    expect(errors(beyond('unknown'))).toEqual([]);
+    expect(warnings(beyond('unknown'))).toEqual(['trace.passivity-unknown', 'trace.phase-outside-passive-range']);
+    expect(errors(beyond('not-passive'))).toEqual([]);
+    expect(warnings(beyond('not-passive'))).toEqual([]);
+    expect(errors({ ...base, points: base.points.map((p, i) => (i === 2 ? { ...p, phaseDeg: NaN } : p)) })).toEqual(['trace.phase-invalid']);
+  });
+
+  it('validates uncertainty units, sense resistor, numeric conditions and blank strings', () => {
+    expect(errors({ ...base, impedanceUncertainty: { type: 'absolute', plusMinus: 1, unit: 'W' } })).toEqual(['trace.uncertainty-unit-mismatch']);
+    expect(errors({ ...base, impedanceUncertainty: { type: 'range', low: 7, high: 9, unit: 'JPY' } })).toEqual(['trace.uncertainty-unit-mismatch']);
+    expect(errors({ ...base, impedanceUncertainty: { type: 'range', low: 7, high: 9, unit: 'Ω' } })).toEqual([]);
+    expect(errors({ ...base, impedanceUncertainty: { type: 'relative', plusMinusPercent: 3 } })).toEqual([]);
+    expect(errors({ ...base, method: { ...base.method, senseResistorOhms: NaN } })).toEqual(['trace.sense-resistor-invalid']);
+    expect(errors({ ...base, method: { ...base.method, senseResistorOhms: -1 } })).toEqual(['trace.sense-resistor-invalid']);
+    expect(errors({ ...base, conditions: { ...base.conditions, frequencyHz: -5 } })).toEqual(['trace.condition-value-invalid']);
+    expect(errors({ ...base, conditions: { ...base.conditions, bandwidthHz: [20000, 20] } })).toEqual(['trace.condition-value-invalid']);
+    expect(warnings({ ...base, revision: '  ' })).toEqual(['trace.revision-unknown']);
+    expect(warnings({ ...base, method: { ...base.method, driveLevel: '' } })).toEqual(['trace.drive-level-unstated']);
+    expect(warnings({ ...base, conditions: { method: '  ' } })).toEqual(['trace.conditions-unrecorded']);
+  });
+
+  it('reports duplicate ids in the supplied product/source context instead of silently picking one', () => {
+    const amp: Product = { ...speaker, category: 'integrated-amplifier' };
+    const issues = validateTraces(input([base], [amp, speaker]));
+    expect(issues.map((i) => i.code)).toEqual(['trace.context-duplicate-product', 'trace.unknown-product']);
+    const issues2 = validateTraces(input([base], [speaker, amp]));
+    expect(issues2.map((i) => i.code)).toEqual(['trace.context-duplicate-product', 'trace.unknown-product']);
+    const dupSource = validateTraces(input([base], [speaker], [lab, { ...lab, kind: 'manufacturer' }]));
+    expect(dupSource.map((i) => i.code)).toEqual(['trace.context-duplicate-source', 'trace.unknown-source']);
   });
 
   it('enforces provenance and uncertainty rules', () => {
@@ -112,7 +167,7 @@ describe('validateTraces', () => {
     expect(errors({ ...base, status: 'estimated', derivation: '  ' })).toEqual(['trace.derivation-required']);
     expect(errors({ ...base, derivation: 'x' })).toEqual(['trace.derivation-forbidden']);
     expect(errors({ ...base, impedanceUncertainty: { type: 'relative', plusMinusPercent: 0 } })).toEqual(['trace.uncertainty-zero']);
-    expect(errors({ ...base, impedanceUncertainty: { type: 'absolute', plusMinus: -1, unit: 'W' } })).toEqual(['trace.uncertainty-invalid']);
+    expect(errors({ ...base, impedanceUncertainty: { type: 'absolute', plusMinus: -1, unit: 'Ω' } })).toEqual(['trace.uncertainty-invalid']);
     expect(errors({ ...base, phaseUncertaintyDeg: 0 })).toEqual(['trace.phase-uncertainty-invalid']);
     expect(errors({ ...base, version: 0 })).toEqual(['trace.version-invalid']);
     expect(errors({ ...base, capturedAt: '2026-02-30' })).toEqual(['trace.captured-at-invalid']);
@@ -143,9 +198,10 @@ describe('summarizeTrace', () => {
     expect(s.frequencyRangeHz).toEqual([20, 20000]);
     expect(s.pointCount).toBe(7);
     expect(s.measuredPointCount).toBe(7);
-    expect(s.minimumImpedance).toEqual({ ohms: 4.2, frequencyHz: 200 });
+    expect(s.primaryPointCount).toBe(7);
+    expect(s.minimumImpedance).toEqual({ ohms: 4.2, frequencyHz: 200, phaseDegAtMinimum: -15 });
     expect(s.maximumImpedance).toEqual({ ohms: 24, frequencyHz: 50 });
-    expect(s.phaseExtremesDeg).toEqual({ min: -30, max: 60 });
+    expect(s.phaseExtremesDeg).toEqual({ min: { deg: -30, frequencyHz: 100 }, max: { deg: 60, frequencyHz: 20000 } });
     expect(s.note).toContain('判定保留');
     expect(JSON.stringify(s)).not.toMatch(/safe|安全です|良好/);
   });
@@ -154,7 +210,8 @@ describe('summarizeTrace', () => {
     const t = { ...base, points: [...base.points.slice(0, 3), pt(150, 1, -80, 'interpolated', [100, 200]), ...base.points.slice(3)] };
     const s = summarizeTrace(t);
     expect(s.measuredPointCount).toBe(7);
-    expect(s.minimumImpedance).toEqual({ ohms: 4.2, frequencyHz: 200 });
+    expect(s.primaryPointCount).toBe(7);
+    expect(s.minimumImpedance).toEqual({ ohms: 4.2, frequencyHz: 200, phaseDegAtMinimum: -15 });
     const noPhase = summarizeTrace({ ...base, points: base.points.map((p) => ({ ...p, phaseDeg: null })) });
     expect(noPhase.phaseExtremesDeg).toBeNull();
     expect(summarizeTrace({ ...base, points: [pt(100, null, 10), pt(200, null, 20)] }).minimumImpedance).toBeNull();
@@ -174,9 +231,14 @@ describe('resampleTrace', () => {
   it('refuses extrapolation and returns a tracked transform', () => {
     const r = resampleTrace(base, [10, 1000, 30000, 141.4213562373095]);
     expect(r.value.map((p) => p.frequencyHz)).toEqual([141.4213562373095, 1000]);
-    expect(r.value[1]).toMatchObject({ impedanceOhms: 5.1, phaseDeg: 10, kind: 'interpolated', derivedFrom: [1000] });
-    expect(r.steps.map((s) => s.op)).toEqual(['select-measurement', 'unit-convert']);
-    expect(r.steps[1]!.note).toContain('10, 30000 Hz');
+    expect(r.value[1]).toMatchObject({ impedanceOhms: 5.1, phaseDeg: 10, kind: 'interpolated', derivedFrom: [1000], conversion: null });
+    expect(r.steps.map((s) => s.op)).toEqual(['select-measurement', 'interpolate']);
+    expect(r.skipped).toEqual([
+      { frequencyHz: 10, reason: 'outside-range' },
+      { frequencyHz: 30000, reason: 'outside-range' },
+    ]);
+    expect(r.steps[0]!.input).toEqual({ traceId: 't1', version: 1 });
+    expect(r.steps[1]!.note).toContain('outside-range');
     expect(base.points.every((p) => p.kind === 'measured')).toBe(true);
   });
 
@@ -186,5 +248,12 @@ describe('resampleTrace', () => {
     expect(p.impedanceOhms).toBeNull();
     expect(p.phaseDeg).not.toBeNull();
     expect(interpolatePoint({ ...base, points: base.points.slice(0, 1) }, 30)).toBeNull();
+    const both = { ...t, points: t.points.map((q, i) => (i === 3 ? { ...q, phaseDeg: null } : q)) };
+    expect(resampleTrace(both, [150, -1]).skipped).toEqual([
+      { frequencyHz: -1, reason: 'invalid-frequency' },
+      { frequencyHz: 150, reason: 'missing-neighbour-values' },
+    ]);
+    // The resample output is a new array; the input trace is untouched.
+    expect(t.points.filter((q) => q.kind !== 'measured')).toHaveLength(0);
   });
 });

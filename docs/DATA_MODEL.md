@@ -23,9 +23,10 @@ Not yet implemented: `ComparisonContext`, `PairingContext`.
 
 ### Electrical load traces
 
-- Validation (`validateTraces`): strictly increasing positive frequencies; |Z| finite and > 0; phase finite and within ±90° (passivity); ≥ 2 measured points; derived points reference measured frequencies; uncertainty rules as above; estimated requires derivation; status/source-kind consistency; product must be a speaker. Warnings: unknown revision, unstated drive level, no phase data, unstated uncertainty, unrecorded conditions.
-- `summarizeTrace` is descriptive only (range, counts, min/max |Z| with frequency, phase extremes) and carries a note that no compatibility, safety or sound verdict follows from it.
-- `resampleTrace` interpolates linearly on a log-frequency axis between adjacent measured points, refuses extrapolation, and returns the points as `interpolated` with `derivedFrom` plus the transform steps.
+- Points are `measured`, `converted` (same frequency, `conversion` metadata required) or `interpolated` (`derivedFrom` = adjacent bracketing primary frequencies). `passivity` declares whether the ±90° phase rule applies (passive: error; unknown: warning; not-passive: off).
+- Validation (`validateTraces`): strictly increasing positive frequencies; |Z| finite and > 0; phase finite; ≥ 2 primary points; interpolated ancestry bracketed and adjacent; conversion metadata; uncertainty rules as above with unit Ω; sense resistor and numeric conditions sane; blank strings = unstated; estimated requires derivation; status/source-kind consistency; product must be a speaker; duplicate ids in the supplied context reported. Warnings: unknown revision, unstated drive level, no phase data, unstated uncertainty, unrecorded conditions, passivity unknown, phase beyond ±90° on an unknown-passivity trace.
+- `summarizeTrace` is descriptive only (range, counts, min |Z| with its frequency and the phase at that point, max |Z|, phase extremes with frequencies) and carries a note that no compatibility, safety or sound verdict follows from it.
+- `resampleTrace` interpolates linearly on a log-frequency axis between adjacent primary points, refuses extrapolation, lists skipped requests with reasons, and returns `interpolated` points with `derivedFrom` plus `select-measurement` and `interpolate` steps carrying the trace version and method version.
 
 ## Evidence status
 
