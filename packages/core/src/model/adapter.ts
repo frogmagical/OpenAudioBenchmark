@@ -3,8 +3,11 @@
  * the current UI renders. Everything derives from a projection; nothing is
  * typed in twice.
  */
-import type { DemoProduct } from '../types.ts';
+import type { DemoProduct, EvidenceStatus } from '../types.ts';
+import { assertUsable } from './prepare.ts';
+import type { PreparedDataset } from './prepare.ts';
 import { projectProduct, toMetricValues } from './project.ts';
+import { statusRank } from './rules.ts';
 import type { Dataset, ProductProjection, Source } from './types.ts';
 
 /** Legacy label format `ID: notes` used by the v0.4 UI ("出典・測定証跡"). */
@@ -21,16 +24,29 @@ export function sourcesForProduct(dataset: Dataset, productId: string): Source[]
   return ids.map((id) => dataset.sources.find((s) => s.id === id)).filter((s): s is Source => s !== undefined);
 }
 
-export function toDemoProduct(dataset: Dataset, productId: string): DemoProduct {
+/**
+ * Best evidence status among the selected metrics (observed > manufacturer >
+ * estimated > missing). A product with only estimates is `estimated`, one
+ * with nothing usable is `missing`; neither is ever reported as manufacturer data.
+ */
+export function summarizeEvidence(projection: ProductProjection): EvidenceStatus {
+  return Object.values(projection.metrics)
+    .map((m) => m.status)
+    .sort((a, b) => statusRank(a) - statusRank(b))[0] ?? 'missing';
+}
+
+export function toDemoProduct(input: Dataset | PreparedDataset, productId: string): DemoProduct {
+  const prepared = assertUsable(input);
+  const dataset = prepared.dataset;
   if (!dataset.fictional) {
     throw new Error('toDemoProduct only renders fictional datasets; real data needs the provenance-aware view');
   }
   const product = dataset.products.find((p) => p.id === productId);
   if (!product) throw new Error(`Unknown product ${productId}`);
-  const projection: ProductProjection = projectProduct(dataset, productId);
+  const projection: ProductProjection = projectProduct(prepared, productId);
   const values = toMetricValues(projection);
-  const statuses = Object.values(projection.metrics).map((m) => m.status);
-  const verified = statuses.includes('observed');
+  const evidence = summarizeEvidence(projection);
+  const verified = evidence === 'observed';
   const powerMeasurement = dataset.measurements.find((m) => m.id === projection.metrics.power.measurementId);
   return {
     id: product.id,
@@ -43,7 +59,7 @@ export function toDemoProduct(dataset: Dataset, productId: string): DemoProduct 
     features: product.features,
     verified,
     sources: sourcesForProduct(dataset, productId).map(sourceLabel),
-    evidence: verified ? 'observed' : 'manufacturer',
+    evidence,
     conditions: powerMeasurement?.conditions ?? {},
     fictional: true,
   };

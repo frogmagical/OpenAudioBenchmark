@@ -14,7 +14,10 @@ Phase 1 carried numbers on the product (`DemoProduct.price/power/thdn/snr`) with
 4. **Evaluation is independent of the model.** `calculateUtility(values: MetricValues, weights)` depends on nothing in `model/`. The only bridge is `toMetricValues(projection)`; the Phase 1 UI keeps working through `toDemoProduct`.
 5. **Data quality is a gate, not a hint.** `validateDataset` returns typed `QualityIssue`s (errors block use; warnings must be displayed). `explainComparability(a, b)` returns a level (`comparable` / `comparable-with-caveats` / `not-comparable`) with coded, Japanese reasons (condition mismatch, unrecorded required conditions, evidence tier, unit conversion, unstated uncertainty).
 6. **Required conditions per metric** (`REQUIRED_CONDITIONS`): power → load, channels driven, bandwidth; THD+N → load, output level, bandwidth; S/N → weighting, output level; price → none. The demo dataset deliberately leaves output level and weighting unrecorded so the mechanism visibly reports it.
-7. **Fictional flag at dataset level** and on every product; `toDemoProduct` refuses non-fictional datasets.
+7. **Fictional flag at dataset level** and on every product; `toDemoProduct` refuses non-fictional datasets. For non-fictional datasets a source without URL is an error (AGENTS.md §7).
+8. **The gate is enforced, not advisory.** `prepareDataset` → `assertUsable` sits in front of projection, adapter, views and export. Validation warnings attached to the selected measurement are carried into the projection so every view shows them.
+9. **Selection tie-break**: evidence status, then `version`, then `capturedAt`, then id. `version` is a correction counter of the same figure (a re-issued record supersedes its predecessor regardless of date); between unrelated records the capture date decides. Two records that still tie with different values raise `measurement.ambiguous-selection`.
+10. **One lineage per displayed number.** The views take a prepared dataset and derive product values from it; they never accept independently supplied numbers next to provenance. The export publishes the per-metric chain (original record → selection → unit conversion → normalisation).
 
 ## Alternatives considered
 

@@ -94,7 +94,7 @@ describe('each contracted error', () => {
 
 describe('value, provenance and revision boundaries', () => {
   it('rejects a missing-status measurement with a value', () => {
-    const issues = validateDataset(withMeasurement({ value: 0 }, 18));
+    const issues = validateDataset(withMeasurement({ value: 0.01 }, 18));
     expect(issues.filter((i) => i.severity === 'error').map(identity)).toEqual([{
       code: 'measurement.value-status-mismatch', severity: 'error', path: 'measurements[18]', relatedIds: ['m-e-thdn'],
     }]);
@@ -123,7 +123,7 @@ describe('value, provenance and revision boundaries', () => {
     expect(isDatasetUsable(withMeasurement({ version: 1 }))).toBe(true);
   });
 
-  it.each(['2026/11/08', '2026-13-01', '', '2026-02-29', '2026-04-31', '2026-00-01', '2026-11-00', '2026-1-08', '2026-11-08T00:00:00Z'])('rejects invalid capture date %j', (accessedAt) => {
+  it.each(['2026/11/08', '2026-13-01', '2026-02-30', '', '2026-02-29', '2026-04-31', '2026-00-01', '2026-11-00', '2026-1-08', '2026-11-08T00:00:00Z'])('rejects invalid source access date %j', (accessedAt) => {
     expect(validateDataset(withSource({ accessedAt })).filter((i) => i.severity === 'error').map((i) => i.code)).toEqual(['source.accessed-at-invalid']);
   });
 
@@ -266,5 +266,159 @@ describe('rules added after the worker report', () => {
   it('accepts well-formed uncertainty', () => {
     expect(codesOf(withMeasurement({ uncertainty: { type: 'absolute', plusMinus: 0.5, unit: 'W' } }))).toEqual([]);
     expect(codesOf(withMeasurement({ uncertainty: { type: 'range', low: 80, high: 90, unit: 'W' } }))).toEqual([]);
+  });
+});
+
+describe('review regression: value domains and dates', () => {
+  const domainCases: { metric: Measurement['metric']; unit: Measurement['unit']; value: number; expectedCodes: string[] }[] =
+    [
+      { metric: 'price' as const, unit: 'JPY' as const, positiveOnly: true },
+      { metric: 'power' as const, unit: 'W' as const, positiveOnly: true },
+      { metric: 'thdn' as const, unit: '%' as const, positiveOnly: true },
+      { metric: 'thdn' as const, unit: 'dB' as const, positiveOnly: false },
+      { metric: 'snr' as const, unit: 'dB' as const, positiveOnly: false },
+    ].flatMap(({ metric, unit, positiveOnly }) => [-80, -1, 0, Number.MIN_VALUE, 1e-12, 85, NaN, Infinity, -Infinity].map((value) => ({
+      metric, unit, value,
+      expectedCodes: !Number.isFinite(value) ? ['measurement.value-not-finite']
+        : positiveOnly && value <= 0 ? ['measurement.value-out-of-domain'] : [],
+    })));
+
+  it.each(domainCases)('$metric $value $unit has errors $expectedCodes', ({ metric, unit, value, expectedCodes }) => {
+    const issues = validateDataset(withMeasurement({ metric, unit, value }));
+    expect(issues.filter((i) => i.severity === 'error').map((i) => i.code)).toEqual(expectedCodes);
+  });
+
+  const dates = [
+    { date: '2026-11-08', valid: true }, { date: '2024-02-29', valid: true }, { date: '2000-02-29', valid: true },
+    ...['2026/11/08', '2026-13-01', '2026-02-30', '', '2026-02-29', '2026-04-31', '2026-00-01', '2026-11-00', '2026-1-08', '2026-11-08T00:00:00Z']
+      .map((date) => ({ date, valid: false })),
+  ];
+  it.each(dates)('checks all date fields against the same calendar rules: $date', ({ date, valid }) => {
+    const probes = [
+      { dataset: withSource({ accessedAt: date }), code: 'source.accessed-at-invalid', path: 'sources[0]' },
+      { dataset: withSource({ publishedAt: date }), code: 'source.published-at-invalid', path: 'sources[0]' },
+      { dataset: withMeasurement({ capturedAt: date }), code: 'measurement.captured-at-invalid', path: 'measurements[0]' },
+    ];
+    for (const { dataset, code, path } of probes) {
+      expect(validateDataset(dataset).filter((i) => i.severity === 'error').map((i) => ({ code: i.code, path: i.path })))
+        .toEqual(valid ? [] : [{ code, path }]);
+    }
+  });
+
+  it('accepts unknown publication and measurement dates', () => {
+    expect(isDatasetUsable(withSource({ publishedAt: null }))).toBe(true);
+    expect(isDatasetUsable(withMeasurement({ capturedAt: null }))).toBe(true);
+  });
+});
+
+describe('review regression: sources and ids', () => {
+  it.each([null, '', ' \t '])('treats URL %j as missing with dataset-specific severity', (url) => {
+    for (const fictional of [true, false]) {
+      const dataset = withSource({ url });
+      const issues = validateDataset({ ...dataset, fictional, products: dataset.products.map((p) => ({ ...p, fictional })) });
+      expect(issues.filter((i) => i.code === 'source.url-missing' && i.path === 'sources[0]').map(identity)).toEqual([{
+        code: 'source.url-missing', severity: fictional ? 'warning' : 'error', path: 'sources[0]', relatedIds: [DEMO_DATASET.sources[0]!.id],
+      }]);
+    }
+  });
+
+  it.each([false, true])('does not infer source-kind conflicts from duplicate ids (reversed: %s)', (reversed) => {
+    const original = DEMO_DATASET.sources[0]!;
+    const duplicate: Source = { ...original, kind: 'manufacturer' };
+    const sources = reversed ? [duplicate, original] : [original, duplicate];
+    const issues = validateDataset({ ...DEMO_DATASET, sources: [...sources, ...DEMO_DATASET.sources.slice(1)] });
+    expect(issues.filter((i) => i.severity === 'error').map(identity)).toEqual([{
+      code: 'source.duplicate-id', severity: 'error', path: 'sources[1]', relatedIds: [original.id],
+    }]);
+  });
+
+  it.each(['', ' \t '])('rejects blank ids %j on all record types', (id) => {
+    const dataset: Dataset = {
+      ...DEMO_DATASET,
+      products: [{ ...DEMO_DATASET.products[0]!, id }],
+      sources: [{ ...DEMO_DATASET.sources[0]!, id }],
+      measurements: [{ ...base, id, productId: id, sourceId: id }],
+    };
+    expect(validateDataset(dataset).filter((i) => i.severity === 'error').map(identity)).toEqual([
+      { code: 'product.id-empty', severity: 'error', path: 'products[0]', relatedIds: [id] },
+      { code: 'source.id-empty', severity: 'error', path: 'sources[0]', relatedIds: [id] },
+      { code: 'measurement.id-empty', severity: 'error', path: 'measurements[0]', relatedIds: [id] },
+    ]);
+  });
+
+  it('warns for an unreferenced source and counts estimated citations as references', () => {
+    const unused = { ...DEMO_DATASET.sources[0]!, id: 'unused' };
+    const dataset = { ...DEMO_DATASET, sources: [...DEMO_DATASET.sources, unused] };
+    expect(validateDataset(dataset).filter((i) => i.code === 'source.unreferenced').map(identity)).toEqual([{
+      code: 'source.unreferenced', severity: 'warning', path: 'sources[7]', relatedIds: ['unused'],
+    }]);
+    expect(validateDataset({ ...dataset, measurements: [...dataset.measurements, { ...base, id: 'estimate', sourceId: 'unused', status: 'estimated', derivation: '計算式' }] })
+      .some((i) => i.code === 'source.unreferenced')).toBe(false);
+  });
+});
+
+describe('review regression: uncertainty', () => {
+  it('forbids uncertainty on a missing measurement', () => {
+    const dataset = withMeasurement({ status: 'missing', value: null, sourceId: null, uncertainty: { type: 'relative', plusMinusPercent: 1 } });
+    expect(validateDataset(dataset).filter((i) => i.severity === 'error').map((i) => i.code)).toEqual(['measurement.uncertainty-forbidden']);
+  });
+
+  it.each<Uncertainty>([
+    { type: 'absolute', plusMinus: 1, unit: 'dB' },
+    { type: 'range', low: 80, high: 90, unit: 'dB' },
+  ])('requires matching published uncertainty units: %j', (uncertainty) => {
+    expect(validateDataset(withMeasurement({ uncertainty })).filter((i) => i.severity === 'error').map((i) => i.code))
+      .toEqual(['measurement.uncertainty-unit-mismatch']);
+  });
+});
+
+describe('review regression: ambiguous selection and relevant conditions', () => {
+  function pair(patch: Partial<Measurement>, first: Measurement = base) {
+    return validateDataset({ ...DEMO_DATASET, measurements: [first, { ...first, id: 'later', ...patch }] });
+  }
+  const ambiguous = (issues: QualityIssue[]) => issues.filter((i) => i.code === 'measurement.ambiguous-selection');
+
+  it.each(['2026-11-08', null])('warns once for different values with the same capture date %s', (capturedAt) => {
+    expect(ambiguous(pair({ value: 60 }, { ...base, value: 85, capturedAt })).map(identity)).toEqual([{
+      code: 'measurement.ambiguous-selection', severity: 'warning', path: 'measurements[1]', relatedIds: [base.id, 'later'],
+    }]);
+  });
+
+  it.each<Partial<Measurement>>([
+    { value: 85 },
+    { value: 60, status: 'manufacturer', sourceId: 'DEMO-MFG-001' },
+    { value: 60, version: 2 },
+    { value: 60, capturedAt: '2025-01-01' },
+    { value: 60, conditions: { ...base.conditions, loadOhms: 4 } },
+    { value: null }, { value: NaN }, { value: Infinity }, { value: 0 },
+    { value: 60, sourceId: null },
+    { value: null, status: 'missing', sourceId: null },
+  ])('does not warn for equal values, distinct priorities, incompatible or unusable records: %j', (patch) => {
+    const first = { ...base, value: 85 };
+    expect(ambiguous(pair(patch, first))).toEqual([]);
+    // An unusable earlier record must not trigger an ambiguity warning either.
+    expect(ambiguous(pair(first, { ...first, ...patch }))).toEqual([]);
+  });
+
+  it('does not assume two unknown condition sets are compatible', () => {
+    expect(ambiguous(pair({ value: 60 }, { ...base, conditions: {} }))).toEqual([]);
+  });
+
+  it('compares raw value and unit without converting', () => {
+    const first: Measurement = { ...base, metric: 'thdn', unit: '%', value: 0.01 };
+    expect(ambiguous(pair({ unit: 'dB', value: -80 }, first))).toHaveLength(1);
+    expect(ambiguous(pair({ unit: 'dB', value: 0.01 }, first))).toHaveLength(1);
+  });
+
+  it('ignores method differences for price while detecting tied different prices', () => {
+    const first: Measurement = { ...base, metric: 'price', unit: 'JPY', conditions: { method: '方法A' } };
+    const issues = pair({ value: 60, conditions: { method: '方法B' } }, first);
+    expect(issues.some((i) => i.code === 'measurement.conditions-not-identical-within-product')).toBe(false);
+    expect(ambiguous(issues)).toHaveLength(1);
+  });
+
+  it('still reports method differences for power', () => {
+    const issues = pair({ conditions: { ...base.conditions, method: '方法B' } }, { ...base, conditions: { ...base.conditions, method: '方法A' } });
+    expect(issues.filter((i) => i.code === 'measurement.conditions-not-identical-within-product')).toHaveLength(1);
   });
 });

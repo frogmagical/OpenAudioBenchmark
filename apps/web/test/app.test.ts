@@ -4,7 +4,8 @@
  * what remains to be verified in a browser.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { METHODOLOGY_VERSION } from '@openaudiobenchmark/core';
+import { DEMO_DATASET, METHODOLOGY_VERSION, prepareDataset } from '@openaudiobenchmark/core';
+import type { Dataset } from '@openaudiobenchmark/core';
 import { initApp } from '../src/app.ts';
 import type { App } from '../src/app.ts';
 import { INVALID_INPUT_TEXT } from '../src/views/pairing.ts';
@@ -297,6 +298,52 @@ describe('catalog', () => {
     expect(el<HTMLInputElement>('#verified').checked).toBe(false);
     expect(records()).toHaveLength(6);
     expect(el('#comparison').textContent).toBe(NO_SELECTION_TEXT);
+  });
+});
+
+describe('catalog with another prepared dataset', () => {
+  it('forwards the dataset to the comparison and derives every number from it', () => {
+    const full = { ...DEMO_DATASET.measurements[0]!.conditions, outputLevel: '1 W', weighting: 'A' as const };
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      measurements: DEMO_DATASET.measurements.map((m) => ({
+        ...m,
+        conditions: full,
+        uncertainty: m.value === null ? null : { type: 'relative', plusMinusPercent: 1 },
+        value: m.id === 'm-a-power' ? 90 : m.value,
+      })),
+    };
+    document.body.innerHTML = body;
+    app = initApp(prepareDataset(ds));
+    const a = records().find((r) => r.dataset['productId'] === 'a')!;
+    expect(a.querySelectorAll('.quality-issues li')).toHaveLength(0);
+    expect(Array.from(a.querySelectorAll('.metric')).find((m) => m.textContent!.includes('定格出力'))!.textContent).toContain('90 W');
+
+    el('[data-select="a"]').click();
+    el('[data-select="b"]').click();
+    expect(document.querySelector('#comparison [data-comparability]')).toBeNull();
+    const cellsText = Array.from(document.querySelectorAll('#comparison .cell')).map((c) => c.textContent);
+    expect(cellsText).toContain('90W');
+    expect(cellsText.filter((t) => t === '条件不一致（比較保留）')).toHaveLength(0);
+
+    el('#json').click();
+  });
+
+  it('includes per-metric provenance lineage in the JSON export', async () => {
+    el('#json').click();
+    const json = JSON.parse(await lastDownloadText()) as {
+      version: string;
+      datasetSchemaVersion: string;
+      products: { id: string; provenance: Record<string, { measurementId: string | null; status: string; steps: { op: string }[] }> }[];
+    };
+    expect(json.version).toBe('0.4.0');
+    expect(json.datasetSchemaVersion).toBe('1.0');
+    const a = json.products.find((p) => p.id === 'a')!;
+    expect(a.provenance['power']!.measurementId).toBe('m-a-power');
+    expect(a.provenance['power']!.steps.map((s) => s.op)).toEqual(['select-measurement', 'unit-convert', 'normalize']);
+    const e = json.products.find((p) => p.id === 'e')!;
+    expect(e.provenance['thdn']!.status).toBe('missing');
+    expect(e.provenance['thdn']!.steps.map((s) => s.op)).toEqual(['select-measurement', 'normalize']);
   });
 });
 

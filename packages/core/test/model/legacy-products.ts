@@ -1,6 +1,13 @@
 /** The Phase 1 literal fixture (v0.4 values), kept to pin the projection of DEMO_DATASET. */
-import { DEMO_CONDITIONS } from '../../src/index.ts';
-import type { DemoProduct } from '../../src/index.ts';
+import type { DemoProduct, MeasurementConditions } from '../../src/index.ts';
+
+/** Pinned independently of the implementation so a baseline change cannot hide. */
+export const DEMO_CONDITIONS: MeasurementConditions = {
+  loadOhms: 8,
+  channelsDriven: 2,
+  bandwidthHz: [20, 20000],
+  method: 'demo-assumed-identical',
+};
 
 export const LEGACY_DEMO_PRODUCTS: readonly DemoProduct[] = [
   {

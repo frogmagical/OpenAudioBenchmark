@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { explainComparability } from '../../src/model/comparability.ts';
 import type { ComparabilityLevel } from '../../src/model/comparability.ts';
+import { DEMO_CONDITIONS } from '../../src/fixtures.ts';
 import { DEMO_DATASET } from '../../src/model/demo-dataset.ts';
 import type { Measurement } from '../../src/model/types.ts';
 
@@ -147,15 +148,12 @@ const cases: Case[] = [
     ],
   },
   {
-    name: 'every blocking rule is retained before the applicable caveats',
+    name: 'different metrics skip condition rules and absent values skip unit probes',
     a: measurement({ metric: 'thdn', unit: 'W', value: null, conditions: { loadOhms: 8 }, uncertainty: null }),
     b: measurement({ id: 'estimate', metric: 'snr', unit: 'dB', status: 'estimated', derivation: '計算式', conditions: { loadOhms: 4 }, uncertainty: null }),
     level: 'not-comparable', reasons: [
       { code: 'metric.differs', details: ['thdn', 'snr'] },
       { code: 'value.missing', details: ['m-a-power', 'estimate'] },
-      { code: 'unit.not-convertible', details: ['W', 'dB'] },
-      { code: 'conditions.mismatch', details: ['loadOhms'] },
-      { code: 'conditions.unrecorded', details: ['outputLevel', 'bandwidthHz', 'weighting'] },
       { code: 'evidence.tier-differs', details: ['observed', 'estimated'] },
       { code: 'evidence.estimated', details: ['estimate'] },
       { code: 'uncertainty.unstated', details: ['m-a-power', 'estimate'] },
@@ -204,6 +202,12 @@ describe('comparability contract', () => {
 });
 
 describe('price is not blocked by unrecorded conditions (no required conditions)', () => {
+  it('ignores demo conditions recorded on only one price', () => {
+    const a = measurement({ metric: 'price', unit: 'JPY', conditions: DEMO_CONDITIONS });
+    const b = measurement({ metric: 'price', unit: 'JPY', conditions: {} });
+    expect(explainComparability(a, b)).toEqual({ level: 'comparable', reasons: [] });
+  });
+
   it('compares two prices recorded without any conditions', () => {
     const a = DEMO_DATASET.measurements.find((m) => m.id === 'm-a-price')!;
     const b = DEMO_DATASET.measurements.find((m) => m.id === 'm-c-price')!;
@@ -218,5 +222,62 @@ describe('price is not blocked by unrecorded conditions (no required conditions)
     const result = explainComparability({ ...a, conditions: {} }, { ...b, conditions: {} });
     expect(result.level).toBe('not-comparable');
     expect(result.reasons.map((r) => r.code)).toContain('conditions.unrecorded');
+  });
+});
+
+describe('review regression: recorded values and explanatory messages', () => {
+  it.each([NaN, Infinity, -Infinity])('treats %s on either side as missing without a unit reason', (value) => {
+    const invalid = measurement({ metric: 'thdn', unit: 'dB', value });
+    const valid = measurement({ metric: 'thdn', unit: '%', value: 0.01 });
+    for (const [a, b] of [[invalid, valid], [valid, invalid]] as const) {
+      expect(explainComparability(a, b).reasons.map((r) => r.code)).toEqual(['value.missing']);
+    }
+  });
+
+  it.each(['dB', 'W'] as const)('does not probe a missing THD+N value in %s', (unit) => {
+    const absent = measurement({ metric: 'thdn', unit, value: null, status: 'missing', sourceId: null });
+    const present = measurement({ metric: 'thdn', unit: '%', value: 0.01 });
+    for (const [a, b] of [[absent, present], [present, absent]] as const) {
+      const result = explainComparability(a, b);
+      expect(result.level).toBe('not-comparable');
+      expect(result.reasons.map((r) => r.code)).toEqual(['value.missing', 'evidence.tier-differs']);
+    }
+  });
+
+  it('still diagnoses an unconvertible real value opposite a missing value', () => {
+    const result = explainComparability(measurement({ value: null }), measurement({ unit: 'dB' }));
+    expect(result.reasons.map((r) => r.code)).toEqual(['value.missing', 'unit.not-convertible']);
+    expect(result.reasons[1]!.message).toContain('dB');
+  });
+
+  it('treats method as relevant to power and names both methods', () => {
+    const result = explainComparability(
+      measurement({ conditions: { ...base.conditions, method: '方法A' } }),
+      measurement({ conditions: { ...base.conditions, method: '方法B' } }),
+    );
+    expect(result.reasons.map((r) => r.code)).toEqual(['conditions.mismatch']);
+    expect(result.reasons[0]!.message).toContain('測定方法が 方法A と 方法B');
+  });
+
+  it('names every mismatched condition and both values', () => {
+    const result = explainComparability(base, measurement({ conditions: { ...base.conditions, loadOhms: 4, channelsDriven: 1 } }));
+    const message = result.reasons[0]!.message;
+    for (const fragment of ['負荷インピーダンス', '8 Ω', '4 Ω', '駆動チャンネル数が 2 と 1', '、']) {
+      expect(message).toContain(fragment);
+    }
+  });
+
+  it('names missing conditions and marks the missing value in a mismatch', () => {
+    const result = explainComparability(base, measurement({ conditions: { loadOhms: 8 } }));
+    const unrecorded = result.reasons.find((r) => r.code === 'conditions.unrecorded')!;
+    expect(unrecorded.message).toContain('駆動チャンネル数');
+    expect(unrecorded.message).toContain('測定帯域');
+    expect(result.reasons.find((r) => r.code === 'conditions.mismatch')!.message).toContain('未記録');
+  });
+
+  it('names both evidence tiers in Japanese', () => {
+    const reason = explainComparability(base, measurement({ status: 'manufacturer' })).reasons[0]!;
+    expect(reason.message).toContain('第三者測定');
+    expect(reason.message).toContain('メーカー公称');
   });
 });

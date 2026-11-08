@@ -11,6 +11,7 @@
  */
 import { DEMO_DATASET } from './model/demo-dataset.ts';
 import { toDemoProduct } from './model/adapter.ts';
+import { assertUsable } from './model/prepare.ts';
 import type { DemoAmp, DemoProduct, DemoSpeaker, FeatureKey, MetricKey, PresetKey, Weights } from './types.ts';
 
 /** Label shown wherever demo data appears. */
@@ -23,7 +24,10 @@ export { DEMO_CONDITIONS } from './model/demo-dataset.ts';
  * `DEMO_DATASET` (one measurement per metric with source and status).
  * The literal values are pinned in `test/model/projection.test.ts`.
  */
-export const DEMO_PRODUCTS: readonly DemoProduct[] = DEMO_DATASET.products.map((p) => toDemoProduct(DEMO_DATASET, p.id));
+/** The demo dataset after the quality gate (throws at load if it ever acquires an error). */
+export const PREPARED_DEMO_DATASET = assertUsable(DEMO_DATASET);
+
+export const DEMO_PRODUCTS: readonly DemoProduct[] = DEMO_DATASET.products.map((p) => toDemoProduct(PREPARED_DEMO_DATASET, p.id));
 
 /** Japanese labels for the four metrics, in display order. */
 export const METRIC_LABELS: Readonly<Record<MetricKey, string>> = {

@@ -27,15 +27,20 @@ Unknown uncertainty is `null`. An uncertainty of 0 is a validation error.
 
 ## From records to scores (lineage)
 
-1. `selectMeasurement`: per product and metric, pick by status priority (observed > manufacturer > estimated), then highest `version`, then latest `capturedAt`.
+1. `selectMeasurement`: per product and metric, pick by status priority (observed > manufacturer > estimated), then highest `version` (a corrected re-issue of the same figure supersedes the original), then latest `capturedAt`, then id. Records carrying a validation error are never selected.
 2. `toCanonicalUnit`: convert the published unit to the metric's canonical unit (JPY, W, %, dB). THD+N dB → % is the only non-identity conversion today. Unconvertible → withheld with an error issue.
 3. `projectProduct` returns, per metric, the chosen measurement id, status, source and a `DerivedValue` with every step recorded; plus `QualityIssue`s (e.g. required condition unrecorded).
 4. `toMetricValues` hands four numbers-or-null to `calculateUtility`. The scorer never sees a `Measurement`.
 
 ## Data-quality gate
 
-- `validateDataset(dataset)` → `QualityIssue[]` with code, severity (error / warning), path, Japanese message and related ids. Errors: dangling references, duplicate ids, value/status inconsistency, non-finite values, unaccepted units, missing source or derivation, zero uncertainty, status/source-kind conflicts, bad dates. Warnings: unrecorded required conditions, differing conditions within one product and metric, sources without URL, products without measurements.
-- `explainComparability(a, b)` → level `comparable` / `comparable-with-caveats` / `not-comparable` with all applicable reasons (metric differs, value missing, unit not convertible, condition mismatch or unrecorded; evidence tier differs, estimated, unit converted, uncertainty unstated).
+- `prepareDataset(dataset)` runs `validateDataset` once and returns a `PreparedDataset` (`usable`, `errors`, `warnings`, `issuesById`). Projection, the adapter, the views and the export accept a prepared dataset; `assertUsable` throws when errors exist, so a dataset that fails the gate never reaches a view or an export. Warnings attached to the selected measurement travel into every projection and are displayed.
+- `validateDataset(dataset)` → `QualityIssue[]` with code, severity (error / warning), path, Japanese message and related ids.
+  - Errors: schema version; fictional flag mismatch; duplicate or empty ids; dangling product/source references; value/status inconsistency; non-finite or out-of-domain values (price > 0, power > 0, THD+N % > 0); unaccepted units; missing source, or a source on a `missing` record; missing or blank derivation on estimates, derivation on non-estimates; uncertainty that is zero, negative, non-finite, reversed, on a `missing` record or in another unit; non-positive-integer version; status/source-kind conflicts; invalid `accessedAt`, `publishedAt`, `capturedAt` (calendar dates, `YYYY-MM-DD`); missing/blank source URL when the dataset is **not** fictional.
+  - Warnings: unrecorded required conditions; differing relevant conditions within one product and metric; ambiguous selection (two equally ranked records with different values); source without URL (fictional datasets); unreferenced sources; products without measurements.
+- Condition relevance: `RELEVANT_CONDITIONS[metric]` limits mismatch checks to the keys that matter for that metric (none for price).
+- `explainComparability(a, b)` → level `comparable` / `comparable-with-caveats` / `not-comparable` with all applicable reasons (metric differs, value missing or non-finite, unit not convertible, relevant condition mismatch — naming each key with both values — or required condition unrecorded; evidence tier differs, estimated, unit converted, uncertainty unstated). `explainMetricComparability(prepared, productA, productB, metric)` applies it to the records two products actually use and treats an absent record exactly like an explicit `missing` one.
+- `evaluateProduct(prepared, productId, weights)` returns the projection, the scorer input, the utility result and, per metric, the full lineage including the `normalize` step. The JSON export (`buildCatalogJson(..., { dataset })`, format 0.4.0) publishes this chain as `provenance`.
 - `REQUIRED_CONDITIONS` per metric: power → loadOhms, channelsDriven, bandwidthHz; THD+N → loadOhms, outputLevel, bandwidthHz; S/N → weighting, outputLevel; price → none.
 
 ## Licensing

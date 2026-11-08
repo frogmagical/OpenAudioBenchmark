@@ -10,11 +10,12 @@ export interface Conversion {
 /**
  * Convert `value` from `from` to the metric's canonical unit.
  * Supported: identity for every metric; THD+N `dB` → `%` via `100 · 10^(dB/20)`
- * (distortion ratios are amplitude ratios). Returns `null` for an unsupported
- * pair or a non-finite result instead of guessing.
+ * (distortion ratios are amplitude ratios). Returns `null` for a non-finite
+ * input, an unsupported pair, or a non-finite / underflowed result instead of guessing.
  */
 export function toCanonicalUnit(metric: MetricId, value: number, from: Unit): Conversion | null {
   const { canonical } = METRIC_UNITS[metric];
+  if (!Number.isFinite(value)) return null;
   if (from === canonical) {
     return {
       value,
@@ -23,7 +24,8 @@ export function toCanonicalUnit(metric: MetricId, value: number, from: Unit): Co
   }
   if (metric === 'thdn' && from === 'dB' && canonical === '%') {
     const percent = 100 * 10 ** (value / 20);
-    if (!Number.isFinite(percent)) return null;
+    // Underflow to 0 would later read as "invalid THD+N"; report it as unconvertible instead.
+    if (!Number.isFinite(percent) || percent <= 0) return null;
     return {
       value: percent,
       step: {
@@ -40,5 +42,6 @@ export function toCanonicalUnit(metric: MetricId, value: number, from: Unit): Co
 /** Inverse of the THD+N conversion, for display. `null` for non-positive input. */
 export function thdnPercentToDb(percent: number): number | null {
   if (!Number.isFinite(percent) || percent <= 0) return null;
-  return 20 * Math.log10(percent / 100);
+  const db = 20 * Math.log10(percent / 100);
+  return Number.isFinite(db) ? db : null;
 }

@@ -5,6 +5,7 @@ import {
   DEMO_PRODUCTS,
   METRIC_KEYS,
   calculateUtility,
+  prepareDataset,
   projectMetric,
   projectProduct,
   selectMeasurement,
@@ -118,12 +119,11 @@ describe('projection lineage and issues', () => {
     expect(a.issues.every((i) => i.severity === 'warning')).toBe(true);
   });
 
-  it('withholds a value whose unit cannot be converted and reports an error', () => {
+  it('a record in a unit the metric does not accept is stopped by the gate before projection', () => {
     const bad: Measurement = { ...base, id: 'bad', unit: 'dB' };
-    const p = projectMetric({ ...DEMO_DATASET, measurements: [bad] }, 'a', 'power');
-    expect(p.derived.value).toBeNull();
-    expect(p.derived.steps.at(-1)?.op).toBe('withhold');
-    expect(p.issues.map((i) => [i.code, i.severity])).toEqual([['measurement.unit-not-convertible', 'error']]);
+    const prepared = prepareDataset({ ...DEMO_DATASET, measurements: [bad] });
+    expect(prepared.errors.map((i) => i.code)).toContain('measurement.unit-not-accepted');
+    expect(() => projectMetric(prepared, 'a', 'power')).toThrow(/validation error/);
   });
 
   it('feeds the scorer the same numbers the Phase 1 fixture carried', () => {

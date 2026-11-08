@@ -4,16 +4,21 @@
  */
 import { FICTIONAL_DATA_NOTICE } from './fixtures.ts';
 import { METHODOLOGY_VERSION } from './methodology.ts';
+import { evaluateProduct } from './model/evaluate.ts';
+import { ensurePrepared } from './model/prepare.ts';
+import type { PreparedDataset } from './model/prepare.ts';
+import type { Dataset } from './model/types.ts';
 import { calculateUtility } from './scoring.ts';
+import { METRIC_KEYS } from './types.ts';
 import type { DemoProduct, UtilityResult, Weights } from './types.ts';
 
 /** Column headers of the catalog CSV, in order. */
 /**
  * Export-format version. 0.1.0 was the prototype's `{coverage, score}` shape; 0.2.0 added status,
  * metric scores, provenance and methodologyVersion; 0.3.0 withholds `score` below the coverage gate
- * and adds `provisionalScore`.
+ * and adds `provisionalScore`; 0.4.0 adds `datasetSchemaVersion` and per-metric `provenance` lineage.
  */
-export const CATALOG_JSON_VERSION = '0.3.0' as const;
+export const CATALOG_JSON_VERSION = '0.4.0' as const;
 
 /**
  * Utility result as published in the JSON export. `score` is `null` unless the
@@ -91,19 +96,52 @@ export function buildCatalogCsv(products: readonly DemoProduct[], weights: Weigh
  * Pretty-printed (2-space) JSON:
  * `{ notice: FICTIONAL_DATA_NOTICE, version: CATALOG_JSON_VERSION, methodologyVersion, date, weights,
  *    products: products.map(p => ({ ...p, computed: toExportedUtility(calculateUtility(p, weights)) })) }`.
- * `version` is the export-format version (see CATALOG_JSON_VERSION).
+ * `version` is the export-format version (see CATALOG_JSON_VERSION). When
+ * `options.dataset` is given, each product also carries `provenance` (per
+ * metric: original record, steps, warnings).
  */
 export function buildCatalogJson(
   products: readonly DemoProduct[],
   weights: Weights,
-  options: { readonly date: string },
+  options: { readonly date: string; readonly dataset?: Dataset | PreparedDataset },
 ): string {
+  const prepared = options.dataset ? ensurePrepared(options.dataset) : null;
   return JSON.stringify({
     notice: FICTIONAL_DATA_NOTICE,
     version: CATALOG_JSON_VERSION,
     methodologyVersion: METHODOLOGY_VERSION,
+    datasetSchemaVersion: prepared?.dataset.schemaVersion ?? null,
     date: options.date,
     weights,
-    products: products.map(product => ({ ...product, computed: toExportedUtility(calculateUtility(product, weights)) })),
+    products: products.map(product => ({
+      ...product,
+      computed: toExportedUtility(calculateUtility(product, weights)),
+      ...(prepared && prepared.dataset.products.some(p => p.id === product.id)
+        ? { provenance: provenanceFor(prepared, product.id, weights) }
+        : {}),
+    })),
   }, null, 2);
+}
+
+/**
+ * Per-metric chain from the original record to the normalised score:
+ * selected measurement id, evidence status, source, every transform step and
+ * the quality warnings. Lets a consumer audit any exported number.
+ */
+function provenanceFor(prepared: PreparedDataset, productId: string, weights: Weights) {
+  const evaluation = evaluateProduct(prepared, productId, weights);
+  return Object.fromEntries(
+    METRIC_KEYS.map(k => {
+      const m = evaluation.projection.metrics[k];
+      const original = m.measurementId ? prepared.dataset.measurements.find(x => x.id === m.measurementId) ?? null : null;
+      return [k, {
+        measurementId: m.measurementId,
+        status: m.status,
+        sourceId: m.sourceId,
+        original: original ? { value: original.value, unit: original.unit, conditions: original.conditions, uncertainty: original.uncertainty } : null,
+        steps: evaluation.lineage[k].steps,
+        issues: m.issues,
+      }];
+    }),
+  );
 }
