@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 // Relative base so the static build also works from a sub-path (e.g. GitHub Pages).
 export default defineConfig({
