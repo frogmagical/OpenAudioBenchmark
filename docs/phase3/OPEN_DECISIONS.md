@@ -18,6 +18,10 @@
 | D-10 | スピーカー指標の `MetricId` 追加と、採点非接続の明文化 | `sensitivity` / `nominalImpedance` / `minimumImpedance` / `crossoverFrequency` を追加、採点対象外 | 採点式は 4 指標固定 | — | — | DATA_GAP G1 |
 | D-11 | 製品リビジョンが特定できない場合の登録可否 | 登録可(警告)。相性診断・比較では「リビジョン不明」を表示 | 同定の不確かさを隠さない | — | — | PRODUCT_IDENTIFICATION.md |
 | D-12 | 実データの配置と公開ビルドの切替方法(`data/real/*.json`、`fictional:false` ローダー) | INGESTION_DESIGN.md のとおり | 架空デモとの混在禁止 | — | — | INGESTION_DESIGN |
+| D-13 | 感度の「平均方法」(1 kHz 点 / 300 Hz–3 kHz 平均 / IEC / Listening Window)を条件キーに含めるか | 含める(`method` を構造化し `RELEVANT_CONDITIONS.sensitivity` に追加)。方法が異なる感度は比較保留 | LS50 Meta で 85 / 84.6 / 83.2 / 83 dB と方法差が 2 dB 近い(PRODUCT_IDENTIFICATION §2.4) | 方法が同一と確認できる場合のみ比較 | 方法未記録 → 保留 | MEASUREMENT_REQUIREMENTS §3-3 |
+| D-14 | 公式文書間で質量・寸法が異なる製品(LS50 Meta 7.2 → 7.8 kg)をどう登録するか | `revision: null` + 警告で登録。測定の試料時期を `notes` に記録。KEF 照会後に版を分ける | リビジョン識別子が公開されていない | 照会で改訂が判明すれば `Product` を分割 | — | PRODUCT_IDENTIFICATION §2.2 |
+| D-15 | メーカー公称値の「事実引用」をライセンス不明でも公開してよいか(SMSL 公式: All Rights Reserved、KEF: 書面同意なしの複製禁止) | 仕様値は事実として出典リンク付きで引用可とし、図表・本文は転載しない。法的判断は PM/PL に委ねる | 事実そのものは著作物でない(ただし表の編集著作物性は国・事案で異なる) | 出典が明示的に数値引用を禁止した場合 | — | SOURCE_INVENTORY §1.2 / §2.2 |
+| D-16 | 第三者測定の数値を扱わず「所在・条件・リンク」のみにする運用を Phase 3 の既定とするか | 既定とする。数値化は許諾照会(案 B)または自前測定(案 C)の後 | NRC・Erin's・HFN のいずれも転載禁止または許諾不明 | 許諾取得後 | — | SOURCE_INVENTORY §2.3 |
 
 ## 本工程で確定させないこと(PL 指示による禁止事項)
 
@@ -30,5 +34,6 @@
 | 情報 | 現状 | 次のアクション |
 | --- | --- | --- |
 | 各出典の利用規約の原文 | SOURCE_INVENTORY.md 参照(一部未確認) | 未確認の発行元へ問い合わせ、または利用を数値の事実引用+リンクに限定 |
-| SMSL AO300 PRO の公式仕様(出力の歪み基準・S/N の重み付け) | 公式製品ページには数値仕様が無く、マニュアル PDF での確認が必要 | マニュアル PDF の取得と転記(PRODUCT_IDENTIFICATION.md) |
-| KEF LS50 Meta のリビジョン有無 | 未確認 | KEF サポート/シリアル規則の確認 |
+| SMSL AO300 PRO の公式仕様(出力の歪み基準・S/N の重み付け) | 公式マニュアルを確認したが**条件は記載されていない** | メーカーへ照会。回答がなければ条件未記録のまま(比較保留) |
+| KEF LS50 Meta のリビジョン有無 | 公式文書間に質量・寸法差、識別子なし | KEF へ照会(D-14) |
+| Stereophile / ASR の本文と規約 | 403 で未取得 | ユーザーがブラウザで確認し、所在と条件のみ記録 |
