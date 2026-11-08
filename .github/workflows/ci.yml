@@ -1,0 +1,18 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: v0.4 baseline integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify prototype/index.html is byte-identical to the approved v0.4
+        run: cd prototype && sha256sum -c SHA256SUMS.txt
