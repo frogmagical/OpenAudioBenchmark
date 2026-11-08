@@ -9,7 +9,7 @@
 | SMSL AO300 PRO | 公式製品ページ・公式マニュアル(Ver 1.0)で仕様値を確認 | **確認できず**(ASR は 403 で検索不能、集約サイトは「独立測定なし」と明記) | 再利用を明示的に許諾した出典は**なし**。公式は All Rights Reserved、小売 2 社は複製禁止 |
 | KEF LS50 Meta | KEF Info sheet(2025-08)・R&D 白書(2020-09)・KEF Japan プレスリリース・公式 Shopify JSON で仕様と価格を確認 | NRC/SoundStage!、Erin's Audio Corner、Hi-Fi News(転載 PDF)を確認。Stereophile・ASR は 403 で未確認 | KEF 規約は書面同意なしの複製・再利用を禁止。NRC "Reproduction in any format is not permitted."、Erin's は "No general license is granted"。spinorama.org は CC BY-NC-SA 4.0 だが測定元の条件が優先 |
 
-公開データセットでは、数値の**事実引用 + 出典リンク**に留め、図表・表の転載や生データの保存は行わない(ADR-0007 P7、DATA_GAP G3)。許諾 `unknown` の出典に基づく数値は公開ビルドで伏せる。
+公開データセットでは、数値の**事実引用 + 出典リンク**に留め、図表・表の転載や生データの保存は行わない(ADR-0007 P7、DATA_GAP G3)。許諾 `unknown` の出典に基づく数値は公開ビルドで伏せる。**帰結**: 両製品とも再利用許諾が明示された出典は存在しないため、D-15(メーカー公称値の事実引用の可否)が未決のままでは、パイロット 2 製品の公開ビルドに表示できる数値はゼロで、出典リンクのみになる。
 
 ## 1. SMSL AO300 PRO
 
@@ -37,7 +37,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SRC-SMSL-MANUAL-PRO | manufacturer | AO300 PRO、Manual Ver 1.0 | **なし**(出力の歪み基準・SNR 重み付け・帯域が未記載) | 事実引用は可能と判断(仕様値は事実)— 要 PL 確認 | 不可(All Rights Reserved) | 不可 | 不可 | 公式サイト "All Rights Reserved"; マニュアル "subject to change without notice" |
 | SRC-SMSL-PAGE | manufacturer | AO300 PRO | — | 同上 | 不可 | 不可 | 不可 | 同上 |
-| SRC-AUDIOPHONICS-PRO | manufacturer(転載) | AO300 PRO | なし | **使用しない**(複製禁止条項) | 不可 | 不可 | 不可 | 第12条 "Any total or partial reproduction of this content is strictly prohibited" |
+| SRC-AUDIOPHONICS-PRO | retailer(公称値の転載) | AO300 PRO | なし | **使用しない**(複製禁止条項。付録の引用は調査ログであり、データ出典にはしない) | 不可 | 不可 | 不可 | 第12条 "Any total or partial reproduction of this content is strictly prohibited" |
 | SRC-AOSHIDA | retailer(価格) | AO300 PRO | — | 価格の事実のみ、要確認 | 不可 | 不可 | 不可 | "You may not use, reproduce, copy, modify, transmit, display, publish, sell" |
 | SRC-SOUNDPHILE / SRC-FRIEVE / SRC-MIMI-2025 | editorial / other | 無印 / PRO | なし | リンクと要旨のみ | 不可 | 不可 | 不可 | 権利表記のみ、許諾文なし |
 | Audio Science Review | independent-lab | — | — | 未確認 | 未確認 | 未確認 | 未確認 | 規約ページ 403 |
@@ -58,9 +58,9 @@
 
 | ID(提案) | 発行元 | 種別 | 一次/二次 | 内容 | URL | 公開日 | 取得日 | 分類 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| SRC-KEF-INFOSHEET-2025 | KEF(販売店ホスティング PDF) | manufacturer | 一次 | Info sheet 08.2025: 感度・インピーダンス・周波数特性・歪み・寸法・質量 | https://www.stassen.nl/images/LS50%20Meta_Info_sheet_EN_20250624.pdf | 2025-08 | 2026-11-08 | 確認済み |
+| SRC-KEF-INFOSHEET-2025 | KEF(販売店ホスティング PDF) | manufacturer | 一次 | Info sheet: 感度・インピーダンス・周波数特性・歪み・寸法・質量 | https://www.stassen.nl/images/LS50%20Meta_Info_sheet_EN_20250624.pdf | 文書表記 08.2025、ファイル名日付 2025-06-24(差異理由未確認) | 2026-11-08 | 確認済み |
 | SRC-KEF-WP-2020 | KEF(販売店ホスティング PDF) | manufacturer | 一次 | R&D 白書(2020-09-18 版)。質量 7.2 kg、奥行 278 mm | https://www.richersounds.com/content/product_files/LS50META.pdf | 2020-09 | 2026-11-08 | 確認済み |
-| SRC-KEF-PR-JP-2020 | KEF Japan(共同通信 PR Wire) | manufacturer | 一次 | 発表 2020-09-22、国内発売 2020-10-02、"価格(税抜き)" 145,000 円 | https://kyodonewsprwire.jp/release/202009214611 | 2020-09-22 | 2026-11-08 | 確認済み |
+| SRC-KEF-PR-JP-2020 | KEF Japan(共同通信 PR Wire) | manufacturer | 一次 | 発表 2020-09-22、国内発売 2020-10-02、"価格(税抜き)" 145,000 円(ペア / 1 本の明記は引用範囲に無く**未確認**) | https://kyodonewsprwire.jp/release/202009214611 | 2020-09-22 | 2026-11-08 | 確認済み(価格単位は未確認) |
 | SRC-KEF-SHOP-INTL / -JP | KEF(Shopify 商品 JSON) | manufacturer | 一次 | 1199.00 EUR(6 仕上げ)/ 187000 JPY(4 仕上げ、2026-11-08 更新)。税・ペア単位の明記なし | https://international.kef.com/products/ls50-meta.json ; https://jp.kef.com/products/ls50-meta.json | — | 2026-11-08 | 確認済み |
 | SRC-KEF-BLOG-2025 | KEF EU | manufacturer | 一次 | 新仕上げ 2025-08-12 | https://eu.kef.com/blogs/news/ls50-new-finishes-moss-green-sand | 2025-08-12 | 2026-11-08 | 確認済み |
 | SRC-NRC-2020 | SoundStage! / NRC | independent-lab | 一次 | 無響室測定、感度 2.83 V/1 m、Listening Window 平均 | https://www.soundstagenetwork.com/index.php?option=com_content&view=article&id=2421 | 2020-11-15 | 2026-11-08 | 確認済み |
@@ -78,7 +78,7 @@
 | KEF 公式文書(Info sheet / 白書 / PR / JSON) | manufacturer | LS50 Meta(リビジョン表記なし) | 感度は 2.83 V/1 m、歪みは 90 dB/1 m。環境・平均法は未記載 | 事実引用は可能と判断 — 要 PL 確認 | 不可 | 不可 | 不可 | KEF 規約: 書面同意なしの複製・再利用を禁止 https://international.kef.com/pages/terms-and-conditions |
 | SRC-NRC-2020 | observed | 試料リビジョン記載なし | 無響室、2 m→1 m 換算、2.83 V、300 Hz–3 kHz 平均 | **使用しない**(転載禁止) | 不可 | 不可 | 不可 | "Reproduction in any format is not permitted." |
 | SRC-EAC-2023 | observed | 試料リビジョン記載なし | Klippel NFS、エージング済み、駆動電圧はページ未記載 | 個別許諾が必要 | 不可 | 不可 | 不可 | データ利用ポリシー "No general license is granted..." https://www.erinsaudiocorner.com/measurement-data-policy/ |
-| SRC-HFN-2021 | observed | 記載なし | 1 kHz / Mean / IEC、2.83 V/1 m | 不可(出版社著作物、転載 PDF) | 不可 | 不可 | 不可 | 許諾文なし(KEF assets 上の配布は KEF と HFN 間の取り決めで、第三者に及ばない) |
+| SRC-HFN-2021 | observed(出版社の Lab Report。`Source.kind` は editorial となり、DATA_MODEL の independent-lab 区分と一致しない点に注意) | 記載なし | 1 kHz / Mean / IEC、2.83 V/1 m | 不可(出版社著作物、転載 PDF) | 不可 | 不可 | 不可 | 許諾文なし(KEF assets 上の配布は KEF と HFN 間の取り決めで、第三者に及ばない) |
 | SRC-SPINORAMA | 再掲 | — | — | 条件付き(非商用・継承)だが測定元条件が優先 | 同左 | 同左 | 同左 | CC BY-NC-SA 4.0 + "測定元の条件が優先" |
 | Stereophile / ASR | observed | — | — | 未確認 | 未確認 | 未確認 | 未確認 | 規約 403 |
 

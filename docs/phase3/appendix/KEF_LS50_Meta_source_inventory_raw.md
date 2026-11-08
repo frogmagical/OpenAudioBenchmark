@@ -1,3 +1,5 @@
+> 付録の扱い: 調査ワーカーの取得ログ。第三者測定の**数値は転記しない**方針(SOURCE_INVENTORY §2.2、D-16)に従い、リードが本文収録前に測定値の記述を削除した。項目の存在・条件・引用(条件文のみ)を残す。
+
 # KEF LS50 Meta ソース台帳(検証済み一次情報の棚卸し)
 
 取得日はすべて 2026-11-08。分類は 確認済み(取得し引用あり)/ 推定(根拠を明記)/ 未確認(取得できず)。引用は原文のまま25語以内。
@@ -97,9 +99,9 @@
 | 筆者 | データ利用ポリシー第2条に Erin Hardison の名 | 確認済み | https://www.erinsaudiocorner.com/measurement-data-policy/ | 2026-11-08 | (第2条: 帰属先として Erin Hardison / Erin's Audio Corner) |
 | 測定系 | Klippel NFS | 確認済み | レビューURL | 2026-11-08 | "All data collected using Klippel's Near-Field Scanner." |
 | 測定項目 | CTA-2034 スピン、PIR、水平/垂直コンター、インピーダンス、ステップ・群遅延、歪(86/96dB@1m)、圧縮、マルチトーン | 確認済み | レビューURL | 2026-11-08 | 歪: "86 dB and 96 dB @ 1m" |
-| 感度(実測) | 軸上平均 83 dB。駆動電圧・距離はページに明記なし | 確認済み(条件は未記載) | レビューURL | 2026-11-08 | "The speaker's direct on-axis response has a mean SPL of 83 dB" |
+| 感度(実測) | 軸上平均感度の記載あり(数値は転記しない)。駆動電圧・距離はページに明記なし | 確認済み(条件は未記載) | レビューURL | 2026-11-08 | (数値引用は方針により省略) |
 | 同(第三者再掲) | spinorama.org は 2.83V/1m、300Hz-3kHz 平均 83.0dB と記載 | 推定(第三者の記載) | https://www.spinorama.org/speakers/KEF%20LS50%20Meta/ErinsAudioCorner/index_eac-v1-0-degree.html | 2026-11-08 | "Origin of the data is ErinsAudioCorner." |
-| 最小インピーダンス | 3.7Ω(80Hz超) | 確認済み | レビューURL | 2026-11-08 | "It has an impedance minimum of 3.7 ohms above 80 Hz" |
+| 最小インピーダンス | 最小インピーダンスとその周波数帯の記載あり(数値は転記しない) | 確認済み | レビューURL | 2026-11-08 | (数値引用は方針により省略) |
 | 条件 | 基準点ツイーター、0°主体・15°追加、エージング済み | 確認済み | レビューURL | 2026-11-08 | "Speaker was broken in." |
 | 試料リビジョン | 記載なし | 確認済み(不存在) | レビューURL | 2026-11-08 | - |
 | 価格記載 | 執筆時 MSRP 約 $1600/pair | 確認済み | レビューURL | 2026-11-08 | "As of this writeup MSRP is approximately $1600/pair." |
@@ -109,7 +111,7 @@
 | 項目 | 内容 | 分類 | URL | 取得日 | 引用 |
 | --- | --- | --- | --- | --- | --- |
 | 測定ページ | 作成日 2020-11-15、NRC で独立測定 | 確認済み | https://www.soundstagenetwork.com/index.php?option=com_content&view=article&id=2421:nrc-measurements-kef-ls50-meta-loudspeakers&catid=77:loudspeaker-measurements&Itemid=153 | 2026-11-08 | "All loudspeaker measurements are performed independently at the National Research Council of Canada." |
-| 感度 | 83.2dB、2.83V/1m、リスニングウィンドウ 300Hz-3kHz 平均 | 確認済み | 同上 | 2026-11-08 | "83.2dB (averaged 300Hz-3kHz on Listening Window, 2.83V/1m)" |
+| 感度 | 感度の記載あり(数値は転記しない)。条件: 2.83V/1m、リスニングウィンドウ 300Hz-3kHz 平均 | 確認済み | 同上 | 2026-11-08 | "(averaged 300Hz-3kHz on Listening Window, 2.83V/1m)" |
 | 測定項目 | 軸上/軸外(15-75°)、リスニングウィンドウ、THD+N、リニアリティ偏差、インピーダンス振幅、電気位相 | 確認済み | 同上 | 2026-11-08 | "@ 90dB, 50Hz - 10kHz (measured @ 2m)" |
 | 条件 | 2m で測定し 1m に換算、ツイーター軸、グリルなし | 確認済み | 同上 | 2026-11-08 | "Microphone measuring position: tweeter axis" |
 | 最小インピーダンス | 数値記載なし(図のみ) | 確認済み(不存在) | 同上 | 2026-11-08 | - |
@@ -122,10 +124,10 @@
 | --- | --- | --- | --- | --- | --- |
 | 文書 | KEF assets 上の Hi-Fi News 転載。LS50 と LS50 Meta の新品試料を同条件で比較 | 確認済み | https://assets.kef.com/pdf_doc/LS50Meta/HFN_June_KEF_LS50_Meta.pdf | 2026-11-08 | "new samples of both the LS50 and LS50 Meta were tested 'back-to-back' under identical lab conditions." |
 | 号・筆者 | ファイル名から6月号。本文に "will be ten years old in 2022" とあり 2021年6月号と推定。Lab は "PM"(Paul Miller)と推定 | 推定 | 同上 | 2026-11-08 | "LS50 which (terrifyingly) will be ten years old in 2022" |
-| 感度 | 84.6dB(1kHz)/84.6dB(Mean)/82.4dB(IEC)、2.83V/1m | 確認済み | 同上 | 2026-11-08 | "Sensitivity (SPL/1m/2.83V – 1kHz/Mean/IEC) 84.6dB / 84.6dB / 82.4dB" |
-| インピーダンス | 表: 最小 3.65Ω@220Hz、最大 31Ω@93Hz。本文は "min. 3.65ohm/242Hz" と周波数表記が不一致 | 確認済み(表内不一致あり) | 同上 | 2026-11-08 | "3.65ohm @ 220Hz" / "31ohm @ 93Hz" |
-| 位相 | −62°@110Hz、+48°@860Hz | 確認済み | 同上 | 2026-11-08 | "Impedance phase: minimum & maximum (20Hz–20kHz)" |
-| 応答誤差 | ペア差 0.5dB、±2.2dB/±2.1dB(200Hz-20kHz) | 確認済み | 同上 | 2026-11-08 | "0.5dB/ ±2.2dB/±2.1dB" |
+| 感度 | 1kHz / Mean / IEC の 3 系統で感度を記載(数値は転記しない)。条件: SPL/1m/2.83V | 確認済み | 同上 | 2026-11-08 | "Sensitivity (SPL/1m/2.83V – 1kHz/Mean/IEC)" |
+| インピーダンス | 最小・最大インピーダンスとその周波数の記載あり(数値は転記しない)。表と本文で最小値の周波数表記が不一致 | 確認済み(表内不一致あり) | 同上 | 2026-11-08 | (数値引用は方針により省略) |
+| 位相 | 位相の最小・最大とその周波数の記載あり(数値は転記しない) | 確認済み | 同上 | 2026-11-08 | "Impedance phase: minimum & maximum (20Hz–20kHz)" |
+| 応答誤差 | ペア差・応答誤差の記載あり(数値は転記しない) | 確認済み | 同上 | 2026-11-08 | (数値引用は方針により省略) |
 | THD | 90dB SPL/1m で 1.2%/0.2%/0.7%(100Hz/1kHz/10kHz) | 確認済み | 同上 | 2026-11-08 | "THD 100Hz/1kHz/10kHz (for 90dB SPL/1m) 1.2% / 0.2% / 0.7%" |
 | 試料リビジョン | 記載なし(「新品試料」のみ) | 確認済み(不存在) | 同上 | 2026-11-08 | - |
 
@@ -179,6 +181,4 @@
 
 ## 付記(取得物の所在)
 
-- 抽出テキスト: /tmp/claude-1000/-home-tokium-Git-MyProject/1253f19b-7e17-422f-bcd8-5af7ca8a8fa4/scratchpad/phase3/raw/infosheet2025.txt、whitepaper2020.txt、hfn.txt(stdlib のみの簡易抽出のため一部文字化け。数値部分は原PDFで再確認可)
-- 原PDF: /home/tokium/.claude/projects/-home-tokium-Git-MyProject/1253f19b-7e17-422f-bcd8-5af7ca8a8fa4/tool-results/webfetch-1794132287031-01x33f.pdf(Info sheet)、webfetch-1794132289492-w19fcp.pdf(白書)、webfetch-1794132326219-nsyybc.pdf(Hi-Fi News 転載)
 - 測定グラフ・大きな表は転記していない(存在と測定条件のみ記録)

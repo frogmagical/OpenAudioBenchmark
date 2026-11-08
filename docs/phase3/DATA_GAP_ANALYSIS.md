@@ -2,22 +2,26 @@
 
 ## 結論
 
-現行モデル(ADR-0004/0005/0006)は、2製品のパイロットに必要な情報の大半を**そのまま表現できる**。モデル拡張が必要なのは次の4点に限られる。
+現行モデル(ADR-0004/0005/0006)は、2製品のパイロットに必要な情報の多くを**そのまま表現できる**。モデル拡張が必要なのは次の 8 点(G1〜G8)。
 
 | # | 不足 | 影響 | 対応区分 |
 | --- | --- | --- | --- |
 | G1 | `MetricId` が 4 指標(price / power / thdn / snr)に固定で、スピーカー指標(感度、公称/最小インピーダンス、周波数範囲、クロスオーバー)を `Measurement` として保持できない | LS50 Meta の公称値を記録できない | **拡張必須** |
 | G2 | `Product.category: 'speaker'` の製品に対し、相性診断が使う `DemoSpeaker.sensitivity {valueDb, reference}` と `Measurement` の間に橋渡しがない | 感度基準(2.83V/1m と 1W/1m)の追跡ができない | **拡張必須** |
 | G3 | `Source` に「一次資料/二次資料」「転載・保存・再配布の可否」「ライセンス確認状況」を区別する項目がない(`license: string | null` のみ) | 利用許諾の管理が自由文に依存 | **拡張必須** |
-| G4 | `MeasurementConditions` に測定機器・試験信号の詳細(例: APx555、1 kHz、バースト/連続、電源電圧)を構造化する項目が一部しかない | 第三者測定の条件を部分的にしか記録できない | 拡張推奨(`method` 自由文で暫定可) |
+| G4 | `MeasurementConditions` に測定機器・試験信号・平均方法(感度)を構造化する項目がなく、`method` 自由文に混在 | 手順差(保留)と機器差(注意)を区別できない。感度の平均方法を判定キーにできない | **拡張必須**(D-03/D-13 の前提) |
+| G5 | 「値を持たないが出典・条件・リンクを持つ測定」(第三者測定の所在のみ記録、許諾未確認で伏せる値)の置き場がない。`missing` に出典を付けるとエラー(`measurement.source-forbidden`)、参照されない出典は警告 | SOURCE_INVENTORY の「所在・条件・リンクのみ」運用(D-16)と P7 の「伏せる」を表現できない | **拡張必須** |
+| G6 | 定格出力の**歪み基準**(1 % / 0.1 % THD+N など)を保持する条件キーがない。`outputLevel` は「図を取った出力レベル」の意味で、転用は誤用 | 歪み基準が異なる W を別測定として弾けない | **拡張必須** |
+| G7 | `Product` に地域・市場、寸法・質量の項目がない。`FeatureKey` が `hdmi/usb/bt/hp/phono` のアンプ専用列挙で、光・同軸・サブウーファー出力やスピーカーの属性を表せない | 「型番・地域仕様・リビジョン」の同定結果と、LS50 Meta の文書間差(質量・奥行)を記録できない | 拡張推奨(同定記録は `notes` で暫定可) |
+| G8 | `Source` 等の拡張に伴う `DATASET_SCHEMA_VERSION`('1.0')の更新方針がない。ゲートは版不一致をエラーにする | スキーマ変更時に既存データが読めなくなる | 方針決定が必要 |
 
-それ以外(出典・証拠種別・条件・不確かさ・系譜・価格観測・インピーダンス特性・品質ゲート)は既存モデルで対応できる。
+それ以外(出典・証拠種別・条件・不確かさ・系譜・価格観測・インピーダンス特性・品質ゲート)は既存モデルで対応できる。なお、現行の投影は**必須条件が未記録でも値を採用し採点に渡す**(警告のみ)。これを維持するか改めるかは D-17。
 
 ## 既存モデルで対応できる項目
 
 | 実データの要素 | 対応するモデル | 備考 |
 | --- | --- | --- |
-| アンプ定格出力(負荷・THD条件つき) | `Measurement{metric:'power', unit:'W', conditions:{loadOhms, channelsDriven, bandwidthHz, outputLevel?}}` | 条件は `outputLevel` に "at 1 % THD+N" のように記録。`REQUIRED_CONDITIONS.power` を満たせる |
+| アンプ定格出力(負荷・ch 数・帯域) | `Measurement{metric:'power', unit:'W', conditions:{loadOhms, channelsDriven, bandwidthHz}}` | `REQUIRED_CONDITIONS.power` は満たせるが、**歪み基準は保持できない**(G6 で拡張) |
 | THD+N / S/N(条件つき) | `Measurement{metric:'thdn' | 'snr'}` | `weighting`(A / unweighted)と `outputLevel` を必須としている |
 | メーカー公称 vs 第三者測定 | `status: manufacturer / observed` + `Source.kind` | 投影は observed を優先(ADR-0004 §3)。**同一指標に両方を保持したまま、どちらを採用したかを系譜に残せる** |
 | 測定条件の不一致 | `compareConditions` / `explainComparability` / 比較ビューの保留表示 | 条件キーは `RELEVANT_CONDITIONS` で指標ごとに制御 |
@@ -41,11 +45,17 @@
 | `frequencyRange` | Hz(範囲) | `bandwidthHz` 形式ではなく値が範囲 → **`Measurement.value` が単一数値のため表現不可**。`rangeLow/rangeHigh` を持つ別型か、`low`/`high` 2 測定に分割する | 要判断(OPEN_DECISIONS D-07) |
 | `crossoverFrequency` | Hz | なし | 参考情報 |
 
-既存 4 指標の `METRIC_BOUNDS`(採点用正規化範囲)はアンプ専用である。スピーカー指標は**採点に接続しない**(採点方式の変更は PL 承認が必要)。`calculateUtility` は `MetricValues` の 4 キーのみを見るため、指標追加は採点に影響しない。
+既存 4 指標の `METRIC_BOUNDS`(採点用正規化範囲)はアンプ専用である。スピーカー指標は**採点に接続しない**(採点方式の変更は PL 承認が必要)。
+
+**型構造上の前提**: 現在 `MetricId = MetricKey` であり、`METRIC_BOUNDS` / `Weights` / `MetricValues` / `METRIC_UNITS` / `REQUIRED_CONDITIONS` / `ProductProjection.metrics` がすべて `Record<MetricKey, …>` で定義されている。`MetricKey` に指標を足すと `METRIC_BOUNDS` と `Weights` への追加が型で強制され、採点側へ漏れる。したがって G1 は次を必須条件とする。
+
+- `MetricKey`(採点 4 指標、`METRIC_KEYS` は 4 件のまま)と `MetricId = MetricKey | SpeakerMetricId`(モデル)を分離する。
+- `projectProduct` は `MetricId` 全体を投影し、`toMetricValues` は `METRIC_KEYS` の 4 件だけを採点へ渡す(スピーカー指標は投影結果にあっても採点入力にならない)。
+- 検証: `METRIC_BOUNDS` に新キーが存在しないことの型テスト、`calculateUtility` の入力型が 4 キーのままであるテスト。
 
 ### G2 — 感度基準の追跡
 
-`DemoSpeaker.sensitivity.reference` は手入力の列挙型である。実データでは `Measurement{metric:'sensitivity'}` の `conditions.inputSignal` から導出する橋渡し関数(`toPairingSpeaker(dataset, productId)`)を追加し、基準が未記録なら相性診断の入力に使わず「判定保留」とする。
+`DemoSpeaker.sensitivity.reference` は閉じた列挙 `'1W/1m' | '2.83V/1m'` である。実データでは自由文 `inputSignal` からの推測ではなく、**構造化キー**(例 `conditions.sensitivityReference: '2.83V/1m' | '1W/1m'`、`conditions.distanceM: number`)を追加し、橋渡し関数 `toPairingSpeaker(dataset, productId)` で `DemoSpeaker` 相当を組み立てる。次の場合は相性診断の入力に使わず**判定保留**とする: 基準未記録、`nominalImpedance` の測定が無い(`sensitivityAt1W` は `nominalOhms` 非有限で `RangeError`)、`nominalImpedance` が `estimated` のみ。検証: 「公称 Z 欠測 → 保留」「基準未記録 → 保留」のテスト。
 
 ### G3 — 出典の利用許諾メタデータ
 
@@ -68,15 +78,46 @@ interface Source {
 
 検証規則(提案): `fictional: false` のデータセットで、`reuse.quoteFacts` が `prohibited` の出典を参照する測定はエラー、`unknown` の出典は警告とし公開ビルドでは数値を伏せてリンクのみ表示する。
 
-### G4 — 測定条件の構造化(推奨)
+### G4 — 測定条件の構造化(必須)
 
-`MeasurementConditions` に `instrument?: string`(例: "Audio Precision APx555")、`testSignal?: string`(例: "1 kHz sine, continuous")、`supplyVoltage?: string` を追加する。`method` 自由文で暫定運用も可能だが、比較可能性の判定キー(`RELEVANT_CONDITIONS`)に乗せるには構造化が必要。
+`MeasurementConditions` に次を追加する。
+
+| キー | 例 | 判定上の扱い(提案、D-03/D-13) |
+| --- | --- | --- |
+| `instrument?: string` | "Audio Precision APx555"、"Klippel NFS" | 相違は**注意**(機器差) |
+| `testSignal?: string` | "1 kHz sine, continuous"、"burst" | 相違は**保留**(手順差) |
+| `averaging?: string` | "1 kHz spot"、"300 Hz–3 kHz mean"、"IEC"、"Listening Window" | 感度では**保留**(手順差) |
+| `supplyVoltage?: string` | "100 V AC" | 注意 |
+| `distortionCriterion?: string` | "THD+N 1 %"、"THD+N 0.1 %" | 定格出力では**保留**(G6) |
+
+### G5 — 値を持たない測定参照
+
+第三者測定の「所在・条件・リンクのみ」(D-16)と、許諾未確認で伏せる値(P7)を表すため、次のいずれかを提案する。
+
+| 案 | 内容 | 利点 | 欠点 |
+| --- | --- | --- | --- |
+| A | 新 status `withheld`(値は `null`、出典・条件必須、投影では常に不採用、UI は「出典で確認」とリンク表示) | 既存 `Measurement` で完結 | `value: null` の意味が missing と二重化 |
+| B | 別型 `MeasurementReference { productId, metric, sourceId, conditions, note }` | missing との混同がない | 投影・UI の分岐が増える |
+
+いずれも検証規則「出典・条件必須」「投影・採点に不採用」を伴う。
+
+### G6 — 定格出力の歪み基準
+
+`distortionCriterion` を `REQUIRED_CONDITIONS.power` と `RELEVANT_CONDITIONS.power` に加える(D-04)。基準が異なる W は別測定として保留される。
+
+### G7 — 製品属性
+
+`Product` に `region?: string`、`dimensionsMm?: {w,h,d}`、`massKg?: number` を追加し、`FeatureKey` はカテゴリ別の列挙(アンプ: 光・同軸・サブウーファー出力等を追加、スピーカー: 端子形式等)か自由タグに拡張する。LS50 Meta の文書間差(7.2/7.8 kg、278/280.5 mm)は `notes` に記録し、照会後に版を分ける(D-14)。
+
+### G8 — スキーマ版
+
+`Source.reuse`(G3)・条件キー(G4)・新 status(G5)はいずれも `DATASET_SCHEMA_VERSION` を '1.1' に上げる変更である。ゲートは版不一致をエラーにするため、既存の架空データセットも同時に更新する。
 
 ## 検証規則で追加が必要なもの
 
 | 規則 | 区分 | 理由 |
 | --- | --- | --- |
-| スピーカー製品に `power` / `thdn` / `snr` 測定を登録したらエラー、アンプ製品に `sensitivity` 等を登録したらエラー(カテゴリ×指標の整合) | 追加必須 | 現在は未チェック(P2-1 レビューでも指摘) |
+| スピーカー製品に `power` / `thdn` / `snr` 測定を登録したらエラー、アンプ製品に `sensitivity` 等を登録したらエラー(カテゴリ×指標の整合) | 追加必須 | 現在は未チェック(P2-1 の独立レビュー報告「Could not verify: category/metric compatibility rule」、PR #4 本文参照) |
 | `sensitivity` に `inputSignal` が無ければ警告、相性診断では採用しない | 追加必須 | 2.83V/1W の混同防止(AGENTS §4) |
 | 非架空データセットで `Source.url` 必須(既存)に加え、`reuse.quoteFacts !== 'prohibited'` | 追加必須 | 利用許諾 |
 | `Product.revision` が `null` の非架空製品は警告 | 追加推奨 | 同定の不確かさを可視化 |

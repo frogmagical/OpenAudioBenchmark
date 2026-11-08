@@ -18,9 +18,9 @@
 | 製造元 | S.M.S.L(Foshan Shuangmusanlin Technology Co., Ltd.) | 確認済み | 公式ページ脚注 "© 2009 Foshan Shuangmusanlin technology Co., Ltd." https://www.smsl-audio.com/portal/product/detail/id/931.html |
 | 公式製品名 | 「AO300 PRO」(副題 DAC&Power Amplifier) | 確認済み | 同上。マニュアル表紙 "AO300 PRO" "USER MANUAL" "Ver 1.0" https://www.smsl-audio.com/upload/portal/download/AO300PROManual.pdf |
 | 無印 AO300 との関係 | 無印は公式の現行一覧・Legacy 一覧に無く、欧州小売で "discontinued"。PRO が後継 | 推定(公式の後継宣言は未取得) | Audiophonics 無印ページ "This product is discontinued"; 公式一覧 https://www.smsl-audio.com/portal/product/lists/id/4.html |
-| 公式仕様上の差分 | 無印マニュアル(Ver 1.0)と PRO マニュアル(Ver 1.0)の仕様ページを照合: 入力が HDMI(ARC) → HDMI(eARC)、重量 1.52 kg/3.35 lbs → 1.49 kg/3.3 lbs。出力・THD+N・SNR・セパレーション・入力感度・寸法は同一 | 確認済み(リードが両 PDF の仕様ページ画像を目視照合) | 上記 2 PDF の仕様ページ(PRO: p.13 英 / p.22 日、無印: p.20 日) |
+| 公式仕様上の差分 | 無印マニュアル(Ver 1.0)と PRO マニュアル(Ver 1.0)の仕様ページを照合: 入力が HDMI(ARC) → HDMI(eARC)、重量 1.52 kg/3.35 lbs → 1.49 kg/3.3 lbs。出力・THD+N・SNR・セパレーション・入力感度・寸法は同一 | 確認済み(リード目視・画像照合、OCR なし。手順と読み取り文字列は appendix/SMSL §2「リードによる一次資料確認記録」) | 上記 2 PDF の仕様ページ(PRO: p.13 英 / p.22 日、無印: p.20 日) |
 | 発表時期 | PRO: 2025-11-06 報道(mimiオーディオ)。無印: 2024-02-27(HiFiGo ブログ、"$289") | 確認済み(二次資料) | https://www.mimiaudio.jp/smsl-ao300-pro/ 、 https://hifigo.com/blogs/news/smsl-ao300 |
-| 地域仕様 | 色は Black / Silver。電源・地域別仕様の記載なし | 確認済み(記載なし) | 公式ページ |
+| 地域仕様 | 色は Black / Silver。電源電圧・地域別仕様の記載は公式ページ・マニュアル仕様ページに見当たらない | 確認済み(リード確認、記載なし) | 公式ページ、マニュアル仕様ページ |
 | 搭載チップ | Infineon 製アンプ IC(公式は型番非記載。小売は MA5332MS と記載)、CS43131、XMOS XU-316、NJW1194 | 公式記載分は確認済み、IC 型番は小売のみ | 公式ページ本文; Audiophonics 商品名 |
 
 ### 1.2 リビジョン
@@ -28,7 +28,7 @@
 | 項目 | 内容 | 分類 |
 | --- | --- | --- |
 | ハードウェア改版表記 | なし | 確認済み(記載なし) |
-| ファームウェア | "Firmware V1.21"、配布ファイル AO300PROFW20260507.zip | 確認済み |
+| ファームウェア | "Firmware V1.21"、配布ファイル AO300PROFW20260507.zip(ファイル名から 2026-05-07 付と**推定**) | 確認済み(版数)/ 推定(日付) |
 | マニュアル版 | Ver 1.0、"subject to change without notice" | 確認済み |
 | 判断 | 改版識別子が公開されていないため、`Product.revision` には上記の FW/マニュアル版と取得日を記録する。将来の仕様改訂は新 `Measurement`(版・取得日更新)で表す | 提案 |
 
@@ -45,7 +45,7 @@
 | 寸法・重量 | 219×42×185 mm (W×H×D)、1.49 kg / 3.3 lbs | — | `Product` 属性候補 |
 | 入力 | HDMI(eARC) / RCA / BT / USB / 光 / 同軸 | — | `features`(hdmi, usb, bt, hp) |
 
-仕様ページには「SMSLは予告なしに仕様や機能を変更する改良を行う権利を有します」とある。**出力の歪み基準と S/N の重み付けが公式に明記されていない**ため、現行の比較規則(条件完全一致)では AO300 PRO の公称値は他製品と比較不能として扱われる。これは規則の意図どおりであり、推測で条件を補ってはならない。
+仕様ページには「SMSLは予告なしに仕様や機能を変更する改良を行う権利を有します」とある。**出力の歪み基準と S/N の重み付けが公式に明記されていない**ため、現行の比較規則(条件完全一致)では AO300 PRO の公称値は他製品と**比較保留**になる。一方、現行の投影(`projectMetric`)は必須条件が未記録でも値を採用し警告を付すだけなので、**採点には入る**(ADR-0004 §3)。条件未記録の値を採点に入れるか否かは PL 判断(D-17)。推測で条件を補ってはならない。
 
 ### 1.4 未確認・リスク
 
@@ -95,12 +95,12 @@
 | 発行元 | 測定系・条件 | 感度の基準 | 試料リビジョン | 取得状況 |
 | --- | --- | --- | --- | --- |
 | SoundStage! / NRC(2020-11-15) | NRC 無響室、2 m 測定を 1 m 換算、Listening Window 300 Hz–3 kHz 平均 | 2.83 V/1 m と明記 | 記載なし | 確認済み(転載禁止条項あり) |
-| Erin's Audio Corner(2023-12-22) | Klippel NFS、CTA-2034、歪み 86/96 dB@1 m、エージング済み | 駆動電圧はページに明記なし(spinorama.org の再掲では 2.83 V) | 記載なし | 確認済み |
+| Erin's Audio Corner(2023-12-22) | Klippel NFS、CTA-2034、歪み 86/96 dB@1 m、エージング済み | 駆動電圧はページに明記なし(spinorama.org の再掲では 2.83 V — 第三者記載につき推定) | 記載なし | 確認済み(条件)/ 推定(駆動電圧) |
 | Hi-Fi News Lab Report(KEF assets 配布の転載 PDF) | 1 kHz / Mean / IEC の 3 系統で感度、最小インピーダンスと位相極値、THD | 2.83 V/1 m と明記 | 記載なし | 確認済み(号・筆者は推定) |
 | Stereophile(John Atkinson) | — | スニペットのみ | — | **未確認**(403) |
 | Audio Science Review(スレッド 25574) | Klippel NFS(spinorama.org の記載) | — | — | **未確認**(403) |
 
-各測定の感度は平均帯域・方法が異なり(メーカー 85 dB、NRC 83.2 dB、HFN 84.6/84.6/82.4 dB、Erin 83 dB)、**同じ「2.83 V/1 m」でも平均方法が違えば直接比較できない**。これは MEASUREMENT_REQUIREMENTS §3 の課題 3・6 の実例であり、方法を条件キーに含める(G4)必要性を示す。
+各測定の感度は平均帯域・方法(1 kHz 点 / 300 Hz–3 kHz 平均 / IEC / Listening Window / 軸上平均)が異なり、**同じ「2.83 V/1 m」でも平均方法が違えば直接比較できない**(各値は各出典を参照。方針により第三者測定の数値は転記しない)。これは MEASUREMENT_REQUIREMENTS §3 の課題 3・6 の実例であり、平均方法を条件キーに含める(G4、D-13)必要性を示す。
 
 ### 2.5 未確認・リスク
 

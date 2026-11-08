@@ -34,7 +34,20 @@
 
 ## 2. メーカー仕様
 
-公式製品ページには数値仕様がない。公式マニュアル PDF(PRO・無印とも)はテキスト抽出不可のため、仕様値の一次情報は 未確認。以下は小売・レビューサイトの転載値。
+公式製品ページには数値仕様がない。調査ワーカーの時点では公式マニュアル PDF がテキスト抽出不可のため「未確認」としていたが、**リードが後述の手順で仕様ページを画像化して目視確認し、確認済みに更新した**(下記「リードによる一次資料確認記録」)。小売サイトの転載値は参考情報であり、SOURCE_INVENTORY の方針により `Measurement` の出典には使わない。
+
+### リードによる一次資料確認記録(2026-11-08)
+
+| 手順 | 内容 |
+| --- | --- |
+| 対象 | 公式マニュアル PDF 2 件(AO300PROManual.pdf 28 ページ、AO300Manual.pdf 25 ページ)。URL は §1 のとおり |
+| 方法 | PyMuPDF 1.28.2 で全ページを 90 dpi の PNG に描画し、仕様ページをリードが目視で読み取った(フォント埋め込みのためテキスト抽出は不可)。画像は著作物の複製にあたるためリポジトリには含めない |
+| 仕様ページ | PRO: p.13(英語 "Specifications")、p.22(日本語「技術仕様」)。無印: p.20(日本語「技術仕様」) |
+| 読み取った文字列(PRO p.13/p.22) | "Input: HDMI(eARC)/RCA/BT/USB/Optical/Coaxial"、"THD+N: 0.003%"、"SNR: 107dB"、"Channel separation: 98dB"、"Input Sensitivity / Input Impedance: 280mV/22kΩ"、"Output Power: 165Wx2(4Ω) / 85Wx2(8Ω)"、"Power Consumption: 40W(Normal Volume)"、"Size: 219X42X185mm(WxHxD)"、"Weight: 1.49kg/3.3lbs"。注記 "SMSL reserves the right to make improvements which may result in specification or feature changes without notice." |
+| 読み取った文字列(無印 p.20) | 同一項目で "HDMI(ARC)"、"1.52kg/3.35lbs"。他の数値は PRO と同一 |
+| 確認できなかったこと | 出力電力の歪み基準、THD+N の測定条件、SNR の重み付け、測定帯域はいずれのページにも記載なし |
+| 位置づけ | 分類は「確認済み(リード目視、画像照合)」。OCR による機械抽出ではないため、転記誤りの可能性は残る。第三者による再確認を推奨 |
+
 
 | 項目 | 内容 | 分類 | URL | 取得日 | 引用 |
 | --- | --- | --- | --- | --- | --- |
