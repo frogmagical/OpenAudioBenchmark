@@ -12,7 +12,6 @@ import {
   METRIC_UNITS,
   PREPARED_DEMO_DATASET,
   STATUS_LABELS,
-  assertUsable,
   formatConditionValue,
   projectProduct,
 } from '@openaudiobenchmark/core';
@@ -97,8 +96,9 @@ function link(url: string | null): string {
   return `${escapeHtml(trimmed)} <span class="small">（リンク化しない形式）</span>`;
 }
 
+// The dataset gate is asserted once at startup (initApp). The renderer itself still escapes every value,
+// so it stays safe even when driven directly with an unvalidated dataset (defence in depth, tested).
 export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET): void {
-  assertUsable(prepared);
   const target = qs('#sourcesView');
   const { dataset } = prepared;
   const citations = new Map<string, number>();
