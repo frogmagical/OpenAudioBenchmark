@@ -1,0 +1,41 @@
+/** Declarative rules for price observations (P2-3A). */
+import type { PriceConditions, PriceObservation } from './types.ts';
+
+/**
+ * ISO 8601 date-time with an explicit UTC offset or `Z`, e.g.
+ * `2026-11-08T09:00:00+09:00`. Local times without offset are rejected:
+ * a price observation without a determinable instant is not reproducible.
+ */
+export const ISO_DATETIME_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
+
+export function isIsoDateTimeWithOffset(value: string): boolean {
+  if (!ISO_DATETIME_WITH_OFFSET.test(value)) return false;
+  const t = Date.parse(value);
+  return Number.isFinite(t);
+}
+
+/**
+ * Condition fields that must be equal for two observations to be compared
+ * without caveats. `taxIncluded` / `shippingIncluded` being `null` on either
+ * side is a caveat (unstated), a `true` vs `false` difference is a block.
+ */
+export const BLOCKING_CONDITION_KEYS: readonly (keyof PriceConditions)[] = ['itemCondition', 'taxIncluded', 'shippingIncluded', 'bundle'];
+export const CAVEAT_CONDITION_KEYS: readonly (keyof PriceConditions)[] = ['couponApplied', 'locale'];
+
+export const ITEM_CONDITION_LABELS: Readonly<Record<PriceConditions['itemCondition'], string>> = {
+  new: '新品',
+  'open-box': '開封済み未使用',
+  refurbished: '整備済み',
+  used: '中古',
+};
+
+export const PRICE_KIND_LABELS: Readonly<Record<PriceObservation['kind'], string>> = {
+  list: 'メーカー希望小売価格',
+  street: '店頭・販売価格',
+  sold: '成約価格',
+};
+
+/** Whole days between two observation instants (absolute, floor). */
+export function daysBetween(aIso: string, bIso: string): number {
+  return Math.floor(Math.abs(Date.parse(aIso) - Date.parse(bIso)) / 86_400_000);
+}
