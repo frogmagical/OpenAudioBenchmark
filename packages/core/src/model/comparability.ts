@@ -51,6 +51,11 @@ export interface Comparability {
  * All applicable reasons are reported, not only the first. Messages are Japanese and must say
  * *why* the pair cannot (or can only partly) be compared.
  */
+/** A condition is unrecorded when absent, or a blank string (an empty instrument name records nothing). */
+function isUnrecorded(value: unknown): boolean {
+  return value === undefined || (typeof value === 'string' && value.trim() === '');
+}
+
 export function explainComparability(a: Measurement, b: Measurement): Comparability {
   const reasons: ComparabilityReason[] = [];
   const add = (code: string, message: string, details: readonly string[]) => reasons.push({ code, message, details });
@@ -82,7 +87,7 @@ export function explainComparability(a: Measurement, b: Measurement): Comparabil
     const unrecorded = [...new Set([
       ...unrecordedRequiredConditions(a.metric, a.conditions),
       ...unrecordedRequiredConditions(b.metric, b.conditions),
-      ...comparisonRequired.filter((key) => a.conditions[key] === undefined || b.conditions[key] === undefined),
+      ...comparisonRequired.filter((key) => isUnrecorded(a.conditions[key]) || isUnrecorded(b.conditions[key])),
     ])].filter((key) => relevant.includes(key));
     if (unrecorded.length > 0) {
       add('conditions.unrecorded', `比較に必要な測定条件が未記録です: ${unrecorded.map((key) => CONDITION_LABELS[key]).join('、')}`, unrecorded);

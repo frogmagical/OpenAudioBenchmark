@@ -101,6 +101,8 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
   const { dataset } = prepared;
   const citations = new Map<string, number>();
   for (const m of dataset.measurements) if (m.sourceId) citations.set(m.sourceId, (citations.get(m.sourceId) ?? 0) + 1);
+  for (const r of dataset.references ?? []) citations.set(r.sourceId, (citations.get(r.sourceId) ?? 0) + 1);
+  for (const r of dataset.ranges ?? []) citations.set(r.sourceId, (citations.get(r.sourceId) ?? 0) + 1);
 
   const sourceIssues = (id: string): string => {
     const list = (prepared.issuesById.get(id) ?? []).filter((i) => i.severity === 'warning');
@@ -119,7 +121,7 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
         (s) =>
           `<tr data-source-id="${escapeHtml(s.id)}"><td class="id">${escapeHtml(s.id)}</td><td>${SOURCE_KIND_LABELS[s.kind] ?? escapeHtml(s.kind)}</td><td>${escapeHtml(s.publisher)}</td><td>${link(s.url)}</td>` +
           `<td class="num">${s.publishedAt ? escapeHtml(s.publishedAt) : '未記録'}</td><td class="num">${escapeHtml(s.accessedAt)}</td><td>${s.license ? escapeHtml(s.license) : '未記録'}</td>` +
-          `<td>${s.tier === 'primary' ? '一次' : '二次'}</td><td data-reuse="${s.reuse.quoteFacts}">${REUSE_LABELS[s.reuse.quoteFacts]}${s.reuse.checkedAt ? `<br><span class="small">確認 ${escapeHtml(s.reuse.checkedAt)}</span>` : ''}</td>` +
+          `<td>${s.tier === 'primary' ? '一次' : '二次'}</td><td data-reuse="${escapeHtml(s.reuse.quoteFacts)}">${REUSE_LABELS[s.reuse.quoteFacts] ?? escapeHtml(String(s.reuse.quoteFacts))}${s.reuse.checkedAt ? `<br><span class="small">確認 ${escapeHtml(s.reuse.checkedAt)}</span>` : ''}</td>` +
           `<td class="num">${citations.get(s.id) ?? 0}</td><td>${s.notes ? escapeHtml(s.notes) : ''}</td>` +
           `<td>${sourceIssues(s.id)}</td></tr>`,
       )

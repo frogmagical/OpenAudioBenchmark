@@ -7,6 +7,7 @@ import { isCalendarDate, isInvalidUncertainty, isZeroUncertainty } from './commo
 import { isValueInDomain, METRIC_CATEGORIES, METRIC_UNITS, RELEVANT_CONDITIONS, unrecordedConditionsMessage, unrecordedRequiredConditions, VALUE_DOMAIN } from './rules.ts';
 import { DATASET_SCHEMA_VERSION, NUMBER_STORAGE_PERMITTED } from './types.ts';
 import type { Dataset, Measurement, QualityIssue, Source } from './types.ts';
+import type { MeasurementConditions } from '../types.ts';
 
 
 /**
@@ -28,6 +29,11 @@ import type { Dataset, Measurement, QualityIssue, Source } from './types.ts';
  * - `measurement.source-forbidden`: `status === 'missing'` with a `sourceId` (nothing was measured, so nothing is cited).
  * - `measurement.unit-not-accepted`: `unit` not in `METRIC_UNITS[metric].accepted`.
  * - `measurement.metric-category-mismatch`: metric not allowed for the product's category (`METRIC_CATEGORIES`).
+ * - `measurement.condition-value-invalid` / `reference.condition-value-invalid` / `range.condition-value-invalid`:
+ *   blank string conditions, non-positive or non-finite numeric conditions, descending bands (`conditionProblems`).
+ * - `source.reuse-value-invalid`: a reuse permission outside the `ReusePermission` vocabulary.
+ * - `reference.status-source-kind-conflict`, `range.source-reuse-not-permitted` (non-fictional), range ids must not
+ *   collide with measurement or reference ids.
  * - `measurement.source-reuse-not-permitted` (non-fictional datasets only): a numeric measurement cites a source whose
  *   `reuse.quoteFacts` is not in `NUMBER_STORAGE_PERMITTED` (D-15: unknown/prohibited → `MeasurementReference` only).
  * - `source.reuse-checked-at-invalid`: `reuse.checkedAt` not a calendar date; `source.reuse-basis-required`: a permission
@@ -67,6 +73,30 @@ import type { Dataset, Measurement, QualityIssue, Source } from './types.ts';
  *
  * Issues are returned in dataset order (products, then sources, then measurements), stable.
  */
+/**
+ * Structural sanity of recorded conditions (schema 1.1): blank strings are not
+ * a record; numeric conditions must be finite and positive; bands ascending.
+ * Returns human-readable problems (empty when fine).
+ */
+export function conditionProblems(c: MeasurementConditions): string[] {
+  const problems: string[] = [];
+  for (const key of ['instrument', 'testSignal', 'averaging', 'distortionCriterion', 'inputSignal', 'outputLevel', 'method'] as const) {
+    const v = c[key];
+    if (v !== undefined && v.trim() === '') problems.push(`${key} が空文字`);
+  }
+  for (const key of ['frequencyHz', 'loadOhms', 'distanceM'] as const) {
+    const v = c[key];
+    if (v !== undefined && (!Number.isFinite(v) || v <= 0)) problems.push(`${key} は正の有限値`);
+  }
+  if (c.channelsDriven !== undefined && (!Number.isInteger(c.channelsDriven) || c.channelsDriven <= 0)) problems.push('channelsDriven は正の整数');
+  for (const key of ['bandwidthHz', 'averagingBandHz'] as const) {
+    const v = c[key];
+    if (v !== undefined && (!Number.isFinite(v[0]) || !Number.isFinite(v[1]) || v[0] <= 0 || v[0] > v[1])) problems.push(`${key} は 0 < low ≤ high`);
+  }
+  if (c.bandwidthHz !== undefined && c.bandwidthHz[0] === c.bandwidthHz[1]) problems.push('bandwidthHz は low < high');
+  return problems;
+}
+
 export function validateDataset(dataset: Dataset): QualityIssue[] {
   const issues: QualityIssue[] = [];
   const add = (code: string, severity: QualityIssue['severity'], path: string, message: string, relatedIds: string[]) => {
@@ -77,10 +107,19 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
   const sources = new Map<string, Source>();
   const duplicateSourceIds = new Set<string>();
   const measuredProducts = new Set(dataset.measurements.map((measurement) => measurement.productId));
-  const citedSources = new Set(dataset.measurements
-    .filter((measurement) => measurement.status === 'observed' || measurement.status === 'manufacturer')
-    .map((measurement) => measurement.sourceId));
-  const referencedSources = new Set(dataset.measurements.map((measurement) => measurement.sourceId));
+  const citedSources = new Set<string | null>([
+    ...dataset.measurements
+      .filter((measurement) => measurement.status === 'observed' || measurement.status === 'manufacturer')
+      .map((measurement) => measurement.sourceId),
+    ...(dataset.references ?? []).map((reference) => reference.sourceId),
+    ...(dataset.ranges ?? []).map((range) => range.sourceId),
+  ]);
+  const referencedSources = new Set<string | null>([
+    ...dataset.measurements.map((measurement) => measurement.sourceId),
+    ...(dataset.references ?? []).map((reference) => reference.sourceId),
+    ...(dataset.ranges ?? []).map((range) => range.sourceId),
+  ]);
+  const REUSE_VALUES = ['allowed', 'allowed-with-attribution', 'permitted-by-law-or-terms', 'unknown', 'prohibited'];
 
   if (dataset.schemaVersion !== DATASET_SCHEMA_VERSION) {
     add('dataset.schema-version', 'error', 'schemaVersion', 'データセットのスキーマ版が対応する版と一致しません', []);
@@ -121,6 +160,9 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
       add('source.reuse-checked-at-invalid', 'error', path, '利用許諾の確認日は実在する日付を YYYY-MM-DD 形式で記録してください', [source.id]);
     }
     const permissions = [source.reuse.quoteFacts, source.reuse.reproduceFigures, source.reuse.storeRawData, source.reuse.redistribute];
+    if (permissions.some((p) => !REUSE_VALUES.includes(p))) {
+      add('source.reuse-value-invalid', 'error', path, `利用許諾の値が不正です: ${permissions.filter((p) => !REUSE_VALUES.includes(p)).join(', ')}`, [source.id]);
+    }
     if (permissions.some((p) => p !== 'unknown') && (source.reuse.basis === null || source.reuse.basis.trim() === '')) {
       add('source.reuse-basis-required', 'error', path, '利用許諾を unknown 以外に設定する場合は根拠(規約 URL・確認記録等)が必要です', [source.id]);
     }
@@ -164,6 +206,8 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     if (status !== 'missing' && sourceId === null) error('measurement.source-required', '未測定以外の測定には出典が必要です');
     if (status === 'missing' && sourceId !== null) error('measurement.source-forbidden', '未測定のレコードに出典は設定できません');
     if (!METRIC_UNITS[metric].accepted.includes(unit)) error('measurement.unit-not-accepted', `${metric} の単位 ${unit} は対応していません`);
+    const conditionIssues = conditionProblems(measurement.conditions);
+    if (conditionIssues.length > 0) error('measurement.condition-value-invalid', `測定条件の値が不正です: ${conditionIssues.join('; ')}`);
     const owner = productsById.get(productId);
     if (owner && !METRIC_CATEGORIES[metric].includes(owner.category)) {
       error('measurement.metric-category-mismatch', `${metric} は ${owner.category} の製品には記録できません`, [id, productId]);
@@ -237,7 +281,13 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     else if (!METRIC_CATEGORIES[ref.metric].includes(owner.category)) error('reference.metric-category-mismatch', `${ref.metric} は ${owner.category} の製品には記録できません`, [ref.id, ref.productId]);
     if (!sources.has(ref.sourceId)) error('reference.unknown-source', '参照先の出典が見つかりません', [ref.id, ref.sourceId]);
     if (ref.quantities.length === 0 || ref.quantities.some((q) => q.trim() === '')) error('reference.quantities-empty', '測定参照には何が測定されているかを言葉で記録してください');
-    if (ref.quantities.some((q) => /\d/.test(q))) error('reference.quantities-contain-digits', '測定参照の quantities に数値を含めてはいけません(値は転記しない)');
+    if (ref.quantities.some((q) => /\p{Nd}/u.test(q))) error('reference.quantities-contain-digits', '測定参照の quantities に数値を含めてはいけません(値は転記しない。全角数字も不可)');
+    const refSource = sources.get(ref.sourceId);
+    if (refSource && ((ref.status === 'observed' && refSource.kind === 'manufacturer') || (ref.status === 'manufacturer' && refSource.kind === 'independent-lab'))) {
+      error('reference.status-source-kind-conflict', '測定参照の証拠種別と出典の種別が矛盾しています', [ref.id, refSource.id]);
+    }
+    const refConditionIssues = conditionProblems(ref.conditions);
+    if (refConditionIssues.length > 0) error('reference.condition-value-invalid', `測定条件の値が不正です: ${refConditionIssues.join('; ')}`);
     if (!isCalendarDate(ref.accessedAt)) error('reference.accessed-at-invalid', '測定参照の取得日は実在する日付を YYYY-MM-DD 形式で記録してください');
   });
 
@@ -246,7 +296,7 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
     const path = `ranges[${index}]`;
     const error = (code: string, message: string, relatedIds = [range.id]) => add(code, 'error', path, message, relatedIds);
     if (range.id.trim() === '') error('range.id-empty', '範囲レコードの識別子は空にできません');
-    if (seenRanges.has(range.id) || seenMeasurements.has(range.id)) error('range.duplicate-id', '範囲レコードの識別子が重複しています');
+    if (seenRanges.has(range.id) || seenMeasurements.has(range.id) || seenReferences.has(range.id)) error('range.duplicate-id', '範囲レコードの識別子が重複しています(測定・参照とも共有不可)');
     seenRanges.add(range.id);
     const owner = productsById.get(range.productId);
     if (!owner) error('range.unknown-product', '参照先の製品が見つかりません', [range.id, range.productId]);
@@ -263,6 +313,11 @@ export function validateDataset(dataset: Dataset): QualityIssue[] {
       error('range.tolerance-invalid', '許容差は minus なら 0 以下(例 -6)、plus-minus なら正の値(例 3)で記録してください');
     }
     if (!Number.isInteger(range.version) || range.version <= 0) error('range.version-invalid', '範囲レコードの版は正の整数でなければなりません');
+    if (!dataset.fictional && rangeSource && !NUMBER_STORAGE_PERMITTED.includes(rangeSource.reuse.quoteFacts)) {
+      error('range.source-reuse-not-permitted', `出典 ${range.sourceId} の数値引用許諾が ${rangeSource.reuse.quoteFacts} のため、数値範囲として保存できません(MeasurementReference を使用)`, [range.id, range.sourceId]);
+    }
+    const rangeConditionIssues = conditionProblems(range.conditions);
+    if (rangeConditionIssues.length > 0) error('range.condition-value-invalid', `測定条件の値が不正です: ${rangeConditionIssues.join('; ')}`);
     if (range.capturedAt !== null && !isCalendarDate(range.capturedAt)) error('range.captured-at-invalid', '測定日は YYYY-MM-DD 形式の実在する日付で記録してください');
   });
   return issues;

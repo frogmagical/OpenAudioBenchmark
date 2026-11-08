@@ -31,7 +31,7 @@ Phase 1 carried numbers on the product (`DemoProduct.price/power/thdn/snr`) with
 - The methodology version is unchanged (`0.5.0-demo`): formulas, bounds and thresholds did not change. Dataset schema version is `1.0`.
 - UI work to show per-metric status, sources and comparability reasons follows in the same PR where feasible, otherwise as P2-1b.
 
-## Schema 1.1 (Phase 3, implements G1–G8 of docs/phase3/DATA_GAP_ANALYSIS.md)
+## Schema 1.1 (Phase 3, implements the data-model parts of G1–G8 of docs/phase3/DATA_GAP_ANALYSIS.md; G2's pairing bridge and G9 are not included)
 
 | Change | Decision it implements |
 | --- | --- |
@@ -50,4 +50,8 @@ Not in 1.1: scoring eligibility (G9 / D-17) — a separate PR with the demo-resu
 
 ### Effect on the fictional demo (to be approved explicitly, D-18)
 
-The demo records carry no `distortionCriterion` and no `instrument`. Under 1.1 every demo `power` measurement therefore reports `measurement.required-condition-unrecorded`, and in the comparison view the 8 Ω output row and the utility score are withheld with the reason stated (previously: power comparable with the uncertainty caveat). Scores and the catalog are unchanged (eligibility is not implemented). No demo condition is back-filled.
+The demo records carry no `distortionCriterion` and no `instrument`. Under 1.1:
+- numeric scores and coverage of the six demo products are **unchanged** (scoring eligibility is not implemented; condition-unrecorded values still reach the scorer with a warning);
+- quality warnings rise from 17 to 23 (`measurement.required-condition-unrecorded` now also on the six `power` records); the catalog record details therefore show one more warning per product;
+- in the comparison view the 8 Ω output row is **newly withheld** (previously comparable with the uncertainty caveat); THD+N, S/N and the utility score were already withheld.
+No demo condition is back-filled (D-18).
