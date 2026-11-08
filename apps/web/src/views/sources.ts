@@ -75,11 +75,11 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
 
   const sourcesTable =
     `<h3 class="sources-heading">出典一覧<small>${dataset.sources.length} 件。URL・ライセンス・取得日を記録します。</small></h3>` +
-    `<div class="table-scroll"><table class="data-table" id="sourcesTable"><thead><tr><th>ID</th><th>種別</th><th>発行元</th><th>URL</th><th>公開日</th><th>取得日</th><th>ライセンス</th><th>参照数</th><th>備考</th></tr></thead><tbody>` +
+    `<div class="table-scroll"><table class="data-table" id="sourcesTable"><thead><tr><th class="id">ID</th><th>種別</th><th>発行元</th><th>URL</th><th>公開日</th><th>取得日</th><th>ライセンス</th><th>参照数</th><th>備考</th></tr></thead><tbody>` +
     dataset.sources
       .map(
         (s) =>
-          `<tr data-source-id="${escapeHtml(s.id)}"><td>${escapeHtml(s.id)}</td><td>${SOURCE_KIND_LABELS[s.kind]}</td><td>${escapeHtml(s.publisher)}</td><td>${link(s.url)}</td>` +
+          `<tr data-source-id="${escapeHtml(s.id)}"><td class="id">${escapeHtml(s.id)}</td><td>${SOURCE_KIND_LABELS[s.kind]}</td><td>${escapeHtml(s.publisher)}</td><td>${link(s.url)}</td>` +
           `<td class="num">${s.publishedAt ? escapeHtml(s.publishedAt) : '未記録'}</td><td class="num">${escapeHtml(s.accessedAt)}</td><td>${s.license ? escapeHtml(s.license) : '未記録'}</td>` +
           `<td class="num">${citations.get(s.id) ?? 0}</td><td>${s.notes ? escapeHtml(s.notes) : ''}</td></tr>`,
       )
@@ -99,9 +99,9 @@ export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET)
       return (
         `<tr data-product-id="${escapeHtml(p.id)}" data-metric="${k}" data-status="${m.status}">` +
         (i === 0 ? `<th scope="rowgroup" rowspan="${METRIC_KEYS.length}">${escapeHtml(p.name)}<br><span class="small">${escapeHtml(p.maker)}${p.revision ? ` / ${escapeHtml(p.revision)}` : ''}</span></th>` : '') +
-        `<td>${METRIC_LABELS[k]}</td><td class="num">${value}${converted}</td><td>${pill(m.status)}</td><td>${m.sourceId ? escapeHtml(m.sourceId) : '—'}</td>` +
+        `<td>${METRIC_LABELS[k]}</td><td class="num">${value}${converted}</td><td>${pill(m.status)}</td><td class="id">${m.sourceId ? escapeHtml(m.sourceId) : '—'}</td>` +
         `<td>${record ? conditionsList(record.conditions) : '—'}</td><td>${record ? formatUncertainty(record.uncertainty) : '—'}</td>` +
-        `<td>${warnings ? `<ul class="conditions-list">${warnings}</ul>` : '<span class="small">なし</span>'}</td></tr>`
+        `<td>${warnings ? `<ul class="issue-list">${warnings}</ul>` : '<span class="small">なし</span>'}</td></tr>`
       );
     });
   });

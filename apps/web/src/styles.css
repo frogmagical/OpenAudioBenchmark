@@ -37,6 +37,8 @@
 .data-table th{background:#f5f7f8;font-weight:650;color:#3d4e59;white-space:nowrap}
 .data-table tr:last-child td{border-bottom:0}
 .data-table td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.data-table td.id,.data-table th.id{white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+.issue-list{margin:0;padding-left:16px;font-size:11px;color:#6b4d1e;min-width:220px}
 .status-pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:3px;border:1px solid #e2e7ea;background:#f5f7f8;color:#5a6975;white-space:nowrap}
 .status-pill[data-status=observed]{color:var(--good);background:#f3f9f5}
 .status-pill[data-status=manufacturer]{color:var(--warn);background:#fffbf3}
@@ -49,4 +51,5 @@
 .conditions-list{margin:0;padding:0;list-style:none;font-size:11px;color:#56636d}
 .conditions-list li{white-space:nowrap}
 .issue-count{font-variant-numeric:tabular-nums}
+#evidenceTable{min-width:960px}
 @media(max-width:760px){.data-table{min-width:560px}}
