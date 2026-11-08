@@ -52,7 +52,7 @@ Methodology version `0.4.0-demo` reproduces the prototype's formulas, bounds and
 | JSON export shape | `version 0.1.0`, `computed: {coverage, score}` | `version 0.3.0`, `computed` adds status, metric scores, weights used, `methodologyVersion` and `provisionalScore`; products carry provenance and `fictional: true` | Traceability |
 | JSON `computed.score` below the coverage gate | numeric | `null` since 0.5.0-demo (`provisionalScore` keeps the internal ordering value) | Product-owner decision 2026-11-08 (ADR-0003) |
 
-Convention note: 2.83 V ≙ 1 W into 8 Ω (2.83² = 8.0089 W, a 0.005 dB difference that is ignored).
+Convention note: 2.83 V ≙ 1 W into 8 Ω by convention — (2.83 V)² = 8.0089 V², so into an 8 Ω resistive load P = (2.83 V)² / (8 Ω) ≈ 1.0011 W, a 0.005 dB difference that is ignored. For a real loudspeaker (frequency-dependent, complex impedance) any conversion through the nominal impedance is an approximation.
 
 ## Methodology 0.5.0-demo (2026-11-08)
 
