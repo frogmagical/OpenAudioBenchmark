@@ -1,12 +1,14 @@
 /** Schema 1.1 contracts. All numbers and instruments below are fictional test data. */
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { CONDITION_KEYS } from '../../src/conditions.ts';
+import { WEIGHT_PRESETS } from '../../src/fixtures.ts';
 import { METRIC_BOUNDS } from '../../src/methodology.ts';
 import * as scoring from '../../src/scoring.ts';
 import type { MeasurementConditions, MetricKey } from '../../src/types.ts';
 import { METRIC_KEYS } from '../../src/types.ts';
 import { explainComparability } from '../../src/model/comparability.ts';
-import { DEMO_DATASET } from '../../src/model/demo-dataset.ts';
+import { toDemoProduct } from '../../src/model/adapter.ts';
+import { DEMO_CONDITIONS, DEMO_DATASET } from '../../src/model/demo-dataset.ts';
 import { evaluateProduct } from '../../src/model/evaluate.ts';
 import { projectMetric, projectProduct, toMetricValues } from '../../src/model/project.ts';
 import {
@@ -19,7 +21,7 @@ import {
 import type {
   Dataset, Measurement, MeasurementReference, Product, RangeMeasurement, ReusePermission, SourceReuse,
 } from '../../src/model/types.ts';
-import { validateDataset } from '../../src/model/validate.ts';
+import { conditionProblems, validateDataset } from '../../src/model/validate.ts';
 
 const base = DEMO_DATASET.measurements[0]!;
 const speaker: Product = {
@@ -78,6 +80,21 @@ function expectError(dataset: Dataset, code: string, path: string, relatedIds: r
 }
 
 describe('schema 1.1 metric and scoring boundaries', () => {
+  it('preserves the demo quality counts and six balanced-preset scores through the adapter', () => {
+    const issues = validateDataset(DEMO_DATASET);
+    expect(issues.filter((issue) => issue.severity === 'error')).toHaveLength(0);
+    expect(issues.filter((issue) => issue.severity === 'warning')).toHaveLength(23);
+    // Expected product order and one-decimal scores are the main-equivalent demo baseline.
+    const expected = [
+      ['b', '69.5'], ['d', '66.0'], ['f', '56.6'], ['a', '55.5'], ['c', '52.3'], ['e', '51.6'],
+    ] as const;
+    for (const [id, score] of expected) {
+      const result = scoring.calculateUtility(toDemoProduct(DEMO_DATASET, id), WEIGHT_PRESETS.balanced);
+      expect(result.status).toBe('scored');
+      expect(result.score?.toFixed(1), id).toBe(score);
+    }
+  });
+
   it('uses schema 1.1 and permits omitted or empty references and ranges', () => {
     expect(DATASET_SCHEMA_VERSION).toBe('1.1');
     expect(DEMO_DATASET.schemaVersion).toBe('1.1');
@@ -143,6 +160,44 @@ describe('schema 1.1 metric and scoring boundaries', () => {
 });
 
 describe('source reuse', () => {
+  it('range.source-reuse-not-permitted: gates real ranges by quoteFacts and exempts fictional ranges', () => {
+    const permissions: readonly ReusePermission[] = ['unknown', 'prohibited', 'allowed', 'allowed-with-attribution', 'permitted-by-law-or-terms'];
+    const sourceId = 'range-only-source';
+    for (const fictional of [false, true]) {
+      for (const quoteFacts of permissions) {
+        // Synthetic copies exercise the real-dataset gate; these are not real-product claims.
+        const dataset: Dataset = {
+          ...speakerDataset, fictional,
+          products: speakerDataset.products.map((p) => ({ ...p, fictional })),
+          sources: [
+            ...speakerDataset.sources.map((s) => ({ ...s, url: `https://example.invalid/fictional/${s.id}` })),
+            {
+              ...speakerDataset.sources.find((s) => s.id === range.sourceId)!, id: sourceId,
+              url: 'https://example.invalid/fictional/range',
+              reuse: { ...REUSE_UNCHECKED, quoteFacts, basis: 'Fictional permission record' },
+            },
+          ],
+          ranges: [{ ...range, sourceId }],
+        };
+        if (!fictional && (quoteFacts === 'unknown' || quoteFacts === 'prohibited')) {
+          expectError(dataset, 'range.source-reuse-not-permitted', 'ranges[0]', [range.id, sourceId]);
+        } else {
+          expect(errors(dataset)).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it('source.reuse-value-invalid: rejects out-of-vocabulary values in every permission field', () => {
+    for (const key of ['quoteFacts', 'reproduceFigures', 'storeRawData', 'redistribute'] as const) {
+      for (const invalid of ['', 'ALLOWED', 'x" onerror="alert(1)']) {
+        const permission = invalid as unknown as ReusePermission;
+        expectError(withReuse({ ...REUSE_UNCHECKED, [key]: permission, basis: 'Fictional permission record' }),
+          'source.reuse-value-invalid', 'sources[0]', [base.sourceId!]);
+      }
+    }
+  });
+
   it('measurement.source-reuse-not-permitted: gates numeric real records only by quoteFacts', () => {
     const permissions: readonly ReusePermission[] = ['unknown', 'prohibited', 'allowed', 'allowed-with-attribution', 'permitted-by-law-or-terms'];
     for (const quoteFacts of permissions) {
@@ -186,7 +241,55 @@ describe('source reuse', () => {
   });
 });
 
+describe('sources cited only by references or ranges', () => {
+  it.each(['reference', 'range'] as const)('%s-only citations require a URL and count as referenced', (kind) => {
+    const sourceId = `${kind}-only-source`;
+    for (const fictional of [true, false]) {
+      for (const url of [null, '', '   ', 'https://example.invalid/fictional/citation']) {
+        const originalSourceId = kind === 'reference' ? reference.sourceId : range.sourceId;
+        const sourceIndex = speakerDataset.sources.length;
+        const dataset: Dataset = {
+          ...speakerDataset, fictional,
+          products: speakerDataset.products.map((p) => ({ ...p, fictional })),
+          sources: [
+            ...speakerDataset.sources.map((s) => ({ ...s, url: `https://example.invalid/fictional/${s.id}` })),
+            { ...speakerDataset.sources.find((s) => s.id === originalSourceId)!, id: sourceId, url },
+          ],
+          references: kind === 'reference' ? [{ ...reference, sourceId }] : [],
+          ranges: kind === 'range' ? [{ ...range, sourceId }] : [],
+        };
+        expect(dataset.measurements.some((m) => m.sourceId === sourceId)).toBe(false);
+        const issues = validateDataset(dataset);
+        const sourceIssues = issues.filter((issue) => issue.relatedIds.includes(sourceId));
+        const missingUrl = url === null || url.trim() === '';
+        expect(sourceIssues).toEqual(missingUrl ? [{
+          code: 'source.url-missing', severity: fictional ? 'warning' : 'error',
+          path: `sources[${sourceIndex}]`, relatedIds: [sourceId], message: expect.any(String),
+        }] : []);
+        expect(issues.filter((issue) => issue.severity === 'error')).toHaveLength(missingUrl && !fictional ? 1 : 0);
+      }
+    }
+  });
+});
+
 describe('measurement references', () => {
+  it.each(['３．７ Ω', '٣٫٧ Ω'])('reference.quantities-contain-digits: rejects Unicode digits in %s', (quantity) => {
+    expectError(withReference({ quantities: ['output power', quantity] }),
+      'reference.quantities-contain-digits', 'references[0]', [reference.id]);
+  });
+
+  it('accepts quantity descriptions consisting of words without digits', () => {
+    expect(validateDataset(withReference({ quantities: ['output power', '感度', 'インピーダンス振幅と位相'] })))
+      .toEqual(validateDataset(DEMO_DATASET));
+  });
+
+  it('reference.status-source-kind-conflict: rejects both evidence/source contradictions', () => {
+    expectError(withReference({ status: 'observed', sourceId: range.sourceId }),
+      'reference.status-source-kind-conflict', 'references[0]', [reference.id, range.sourceId]);
+    expectError(withReference({ status: 'manufacturer' }),
+      'reference.status-source-kind-conflict', 'references[0]', [reference.id, reference.sourceId]);
+  });
+
   const cases: { code: string; patch: Partial<MeasurementReference>; relatedIds?: string[] }[] = [
     { code: 'id-empty', patch: { id: '  ' }, relatedIds: ['  '] },
     { code: 'unknown-product', patch: { productId: 'absent' }, relatedIds: [reference.id, 'absent'] },
@@ -240,6 +343,8 @@ describe('frequency ranges', () => {
   it('range.duplicate-id: rejects duplicate ranges and collisions with measurements', () => {
     expectError({ ...speakerDataset, ranges: [range, { ...range }] }, 'range.duplicate-id', 'ranges[1]', [range.id]);
     expectError(withRange({ id: base.id }), 'range.duplicate-id', 'ranges[0]', [base.id]);
+    expectError({ ...withRange({ id: reference.id }), references: [reference] },
+      'range.duplicate-id', 'ranges[0]', [reference.id]);
   });
 
   it('range.bounds-invalid: requires finite, positive, increasing bounds', () => {
@@ -301,6 +406,24 @@ describe('structured conditions and comparison-only instrument requirement', () 
     for (const instrument of ['Fictional analyzer A', 'Fictional analyzer B']) expect(result.reasons[0]!.message).toContain(instrument);
   });
 
+  it.each(comparedMetrics)('%s treats blank instruments on either or both sides as unrecorded', (metric) => {
+    const a: Measurement = {
+      ...base, metric, unit: METRIC_UNITS[metric].canonical, conditions: full,
+      uncertainty: { type: 'relative', plusMinusPercent: 1 },
+    };
+    for (const instrument of ['', '   ', '\t\n']) {
+      const blank = { ...a, id: 'blank-instrument', conditions: { ...full, instrument } };
+      for (const [left, right] of [[a, blank], [blank, a], [blank, blank]] as const) {
+        const result = explainComparability(left, right);
+        expect(result.level).toBe('not-comparable');
+        expect(result.reasons).toContainEqual({
+          code: 'conditions.unrecorded', details: ['instrument'], message: expect.stringContaining('測定機器'),
+        });
+      }
+    }
+    expect(explainComparability(a, { ...a, id: 'matching-instrument' })).toEqual({ level: 'comparable', reasons: [] });
+  });
+
   it('instrument is never required for eligibility and does not create a power projection warning', () => {
     for (const metric of METRIC_IDS) expect(REQUIRED_CONDITIONS[metric]).not.toContain('instrument');
     const conditions: MeasurementConditions = { loadOhms: 8, channelsDriven: 2, bandwidthHz: [20, 20000], distortionCriterion: 'THD+N 1 %' };
@@ -312,10 +435,11 @@ describe('structured conditions and comparison-only instrument requirement', () 
 
   it('price comparisons are unaffected by missing or different instruments', () => {
     const price: Measurement = { ...base, metric: 'price', unit: 'JPY', conditions: {}, uncertainty: { type: 'relative', plusMinusPercent: 1 } };
-    for (const conditions of [{}, { instrument: 'Fictional analyzer A' }, { instrument: 'Fictional analyzer B' }]) {
+    for (const conditions of [{}, { instrument: '' }, { instrument: '   ' }, { instrument: 'Fictional analyzer A' }, { instrument: 'Fictional analyzer B' }]) {
       expect(explainComparability(price, { ...price, conditions })).toEqual({ level: 'comparable', reasons: [] });
       expect(explainComparability({ ...price, conditions: { instrument: 'Fictional analyzer A' } }, { ...price, conditions }))
         .toEqual({ level: 'comparable', reasons: [] });
+      expect(explainComparability({ ...price, conditions }, { ...price, conditions })).toEqual({ level: 'comparable', reasons: [] });
     }
   });
 
@@ -326,5 +450,44 @@ describe('structured conditions and comparison-only instrument requirement', () 
     expect(formatConditionValue('sensitivityReference', { sensitivityReference: '2.83V/1m' })).toBe('2.83V/1m');
     expect(Object.keys(CONDITION_LABELS).sort()).toEqual([...CONDITION_KEYS].sort());
     for (const key of CONDITION_KEYS) expect(CONDITION_LABELS[key].trim()).not.toBe('');
+  });
+});
+
+describe('recorded condition value validation', () => {
+  const invalid: { name: string; key: keyof MeasurementConditions; conditions: MeasurementConditions }[] = [
+    ...(['instrument', 'testSignal', 'averaging', 'distortionCriterion', 'inputSignal', 'outputLevel', 'method'] as const)
+      .flatMap((key) => ['', '   ', '\t\n'].map((value) => ({ name: `${key} ${JSON.stringify(value)}`, key, conditions: { [key]: value } }))),
+    ...(['distanceM', 'frequencyHz', 'loadOhms'] as const)
+      .flatMap((key) => [0, -1, NaN, Infinity].map((value) => ({ name: `${key} ${value}`, key, conditions: { [key]: value } }))),
+    ...[0, -1, 1.5, NaN, Infinity].map((channelsDriven) => ({
+      name: `channelsDriven ${channelsDriven}`, key: 'channelsDriven' as const, conditions: { channelsDriven },
+    })),
+    { name: 'descending averaging band', key: 'averagingBandHz', conditions: { averagingBandHz: [3000, 300] } },
+    { name: 'zero averaging band start', key: 'averagingBandHz', conditions: { averagingBandHz: [0, 100] } },
+    { name: 'nonfinite averaging band end', key: 'averagingBandHz', conditions: { averagingBandHz: [100, NaN] } },
+    { name: 'equal bandwidth bounds', key: 'bandwidthHz', conditions: { bandwidthHz: [20, 20] } },
+    { name: 'descending bandwidth', key: 'bandwidthHz', conditions: { bandwidthHz: [20000, 20] } },
+    { name: 'zero bandwidth start', key: 'bandwidthHz', conditions: { bandwidthHz: [0, 20000] } },
+    { name: 'nonfinite bandwidth end', key: 'bandwidthHz', conditions: { bandwidthHz: [20, Infinity] } },
+  ];
+
+  it.each(invalid)('$name is rejected by conditionProblems and all three record validators', ({ key, conditions }) => {
+    expect(conditionProblems(conditions)).toEqual([expect.stringContaining(key)]);
+    expectError(withMeasurement({ conditions }), 'measurement.condition-value-invalid', 'measurements[0]', [base.id]);
+    expectError(withReference({ conditions }), 'reference.condition-value-invalid', 'references[0]', [reference.id]);
+    expectError(withRange({ conditions }), 'range.condition-value-invalid', 'ranges[0]', [range.id]);
+  });
+
+  it('accepts absent conditions, demo conditions, full speaker sensitivity conditions and spot averaging', () => {
+    const fullSensitivity: MeasurementConditions = {
+      ...speakerConditions, testSignal: 'Fictional pink noise', inputSignal: '2.83 V',
+      outputLevel: 'Fictional reference SPL', method: 'Fictional sensitivity procedure',
+    };
+    for (const conditions of [{}, DEMO_CONDITIONS, fullSensitivity, { ...fullSensitivity, averagingBandHz: [1000, 1000] as const }]) {
+      expect(conditionProblems(conditions)).toEqual([]);
+      expect(errors(withMeasurement({ conditions }))).toEqual([]);
+      expect(errors(withReference({ conditions }))).toEqual([]);
+      expect(errors(withRange({ conditions }))).toEqual([]);
+    }
   });
 });

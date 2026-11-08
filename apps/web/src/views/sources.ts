@@ -12,6 +12,7 @@ import {
   METRIC_UNITS,
   PREPARED_DEMO_DATASET,
   STATUS_LABELS,
+  assertUsable,
   formatConditionValue,
   projectProduct,
 } from '@openaudiobenchmark/core';
@@ -97,6 +98,7 @@ function link(url: string | null): string {
 }
 
 export function renderSources(prepared: PreparedDataset = PREPARED_DEMO_DATASET): void {
+  assertUsable(prepared);
   const target = qs('#sourcesView');
   const { dataset } = prepared;
   const citations = new Map<string, number>();

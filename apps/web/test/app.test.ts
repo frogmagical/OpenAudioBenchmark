@@ -5,12 +5,13 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_DATASET, METHODOLOGY_VERSION, prepareDataset } from '@openaudiobenchmark/core';
-import type { Dataset } from '@openaudiobenchmark/core';
+import type { Dataset, ReusePermission } from '@openaudiobenchmark/core';
 import { initApp } from '../src/app.ts';
 import type { App } from '../src/app.ts';
 import { INVALID_INPUT_TEXT } from '../src/views/pairing.ts';
 import { KNOWN_LIMITS } from '../src/views/methodology.ts';
 import { NO_SELECTION_TEXT } from '../src/views/compare.ts';
+import { renderSources } from '../src/views/sources.ts';
 import html from '../index.html?raw';
 
 const body = html.split('<body>')[1]!.split('<script')[0]!;
@@ -431,6 +432,89 @@ describe('pairing', () => {
 });
 
 describe('sources and evidence view', () => {
+  it('counts reference-only and range-only citations and shows their missing-URL warnings', () => {
+    const lab = DEMO_DATASET.sources.find((s) => s.kind === 'independent-lab')!;
+    const manufacturer = DEMO_DATASET.sources.find((s) => s.kind === 'manufacturer')!;
+    const referenceSourceId = 'reference-only-source';
+    const rangeSourceId = 'range-only-source';
+    const reference = {
+      id: 'reference-only-power', productId: 'a', metric: 'power' as const, sourceId: referenceSourceId,
+      quantities: ['output power'], conditions: {}, status: 'observed' as const, accessedAt: '2026-11-08', notes: null,
+    };
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      products: [
+        ...DEMO_DATASET.products,
+        { ...DEMO_DATASET.products[0]!, id: 'citation-speaker', category: 'speaker', name: 'Citation Speaker（架空）', features: [] },
+      ],
+      sources: [
+        ...DEMO_DATASET.sources,
+        { ...lab, id: referenceSourceId, url: null },
+        { ...manufacturer, id: rangeSourceId, url: '   ' },
+      ],
+      references: [reference, { ...reference, id: 'reference-only-thdn', metric: 'thdn', quantities: ['distortion and noise'] }],
+      ranges: [{
+        id: 'range-only-response', productId: 'citation-speaker', metric: 'frequencyRange',
+        lowHz: 47, highHz: 45000, toleranceDb: -6, toleranceKind: 'minus',
+        status: 'manufacturer', sourceId: rangeSourceId, conditions: {}, capturedAt: null, version: 1, notes: null,
+      }],
+    };
+    const prepared = prepareDataset(ds);
+    expect(prepared.errors).toEqual([]);
+    document.body.innerHTML = body;
+    initApp(prepared);
+    expect(el('#sourcesTable thead th:nth-child(10)').textContent).toBe('参照数');
+    for (const [sourceId, count] of [[referenceSourceId, '2'], [rangeSourceId, '1']] as const) {
+      expect(ds.measurements.some((m) => m.sourceId === sourceId)).toBe(false);
+      const row = el(`#sourcesTable tr[data-source-id="${sourceId}"]`);
+      expect(row.querySelectorAll('td')[9]!.textContent).toBe(count);
+      expect(row.querySelector('[data-issue="source.url-missing"]')).not.toBeNull();
+      expect(row.querySelector('[data-issue="source.unreferenced"]')).toBeNull();
+      expect(row.querySelector('a')).toBeNull();
+    }
+  });
+
+  it.each([
+    'x" onerror="alert(1)',
+    'x" onerror="alert(1)"><img src=x onerror="alert(1)">',
+  ])('escapes hostile reuse attributes and fallback labels: %s', (hostile) => {
+    // A source-only fixture tests renderer escaping directly, independently of the ingestion gate.
+    const source = DEMO_DATASET.sources[0]!;
+    const ds: Dataset = {
+      ...DEMO_DATASET, products: [], measurements: [], references: [], ranges: [],
+      sources: [{
+        ...source,
+        reuse: { ...source.reuse, quoteFacts: hostile as unknown as ReusePermission, checkedAt: null },
+      }],
+    };
+    const prepared = prepareDataset(ds);
+    expect(prepared.usable).toBe(false);
+    expect(prepared.errors).toEqual([expect.objectContaining({ code: 'source.reuse-value-invalid' })]);
+    renderSources(prepared);
+    expect(document.querySelectorAll('[onerror]')).toHaveLength(0);
+    expect(document.querySelectorAll('#sourcesView img, #sourcesView script')).toHaveLength(0);
+    expect(document.querySelectorAll('#sourcesTable tbody tr')).toHaveLength(1);
+    expect(document.querySelectorAll('#sourcesTable td')).toHaveLength(12);
+    expect(document.querySelectorAll('td[data-reuse]')).toHaveLength(1);
+    const cell = el('td[data-reuse]');
+    expect(cell.getAttribute('data-reuse')).toBe(hostile);
+    expect(cell.textContent).toBe(hostile);
+    expect(cell.children).toHaveLength(0);
+  });
+
+  it('rejects an invalid reuse permission at app startup even when there are no products', () => {
+    const invalid = 'x" onerror="alert(1)' as unknown as ReusePermission;
+    const ds: Dataset = {
+      ...DEMO_DATASET,
+      sources: DEMO_DATASET.sources.map((s, i) => i === 0 ? { ...s, reuse: { ...s.reuse, quoteFacts: invalid } } : s),
+    };
+    expect(() => initApp(prepareDataset(ds))).toThrow(/source.reuse-value-invalid/);
+    const sourceOnly = prepareDataset({ ...ds, products: [], measurements: [], references: [], ranges: [] });
+    expect(sourceOnly.usable).toBe(false);
+    expect(sourceOnly.errors).toEqual([expect.objectContaining({ code: 'source.reuse-value-invalid' })]);
+    expect(() => initApp(sourceOnly)).toThrow(/source.reuse-value-invalid/);
+  });
+
   it('lists every source with kind, URL state, access date and citation count', () => {
     const rows = Array.from(document.querySelectorAll<HTMLElement>('#sourcesTable tbody tr'));
     expect(rows).toHaveLength(7);
