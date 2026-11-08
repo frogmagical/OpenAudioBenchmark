@@ -12,7 +12,20 @@ Implemented in `packages/core/src/model/` (dataset schema `1.0`, ADR-0004). Stro
 | `MeasurementConditions` | How it was measured | frequencyHz, bandwidthHz, loadOhms, loadType, channelsDriven, inputSignal, outputLevel, weighting, environment, method |
 | `Dataset` | A validated bundle | schemaVersion, fictional, products, sources, measurements |
 
-Not yet implemented (future): `PriceObservation` (amount, currency, locale, merchant, timestamp, condition, tax/shipping assumptions), `SpeakerElectricalTrace` (impedance magnitude/phase vs frequency), `ComparisonContext`, `PairingContext`.
+Additional record types:
+
+| Entity | Purpose | Module |
+| --- | --- | --- |
+| `SpeakerElectricalTrace` | Impedance magnitude and phase vs frequency with method, conditions, uncertainty; points marked measured / interpolated / converted | `model/trace` (ADR-0006) |
+| `PriceObservation`, `ExchangeRate` | Prices as dated observations under stated conditions; tracked currency conversion | `model/price` (ADR-0005, separate PR) |
+
+Not yet implemented: `ComparisonContext`, `PairingContext`.
+
+### Electrical load traces
+
+- Validation (`validateTraces`): strictly increasing positive frequencies; |Z| finite and > 0; phase finite and within ±90° (passivity); ≥ 2 measured points; derived points reference measured frequencies; uncertainty rules as above; estimated requires derivation; status/source-kind consistency; product must be a speaker. Warnings: unknown revision, unstated drive level, no phase data, unstated uncertainty, unrecorded conditions.
+- `summarizeTrace` is descriptive only (range, counts, min/max |Z| with frequency, phase extremes) and carries a note that no compatibility, safety or sound verdict follows from it.
+- `resampleTrace` interpolates linearly on a log-frequency axis between adjacent measured points, refuses extrapolation, and returns the points as `interpolated` with `derivedFrom` plus the transform steps.
 
 ## Evidence status
 

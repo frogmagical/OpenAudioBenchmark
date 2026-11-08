@@ -16,3 +16,4 @@ export * from './model/validate.ts';
 export * from './model/comparability.ts';
 export * from './model/evaluate.ts';
 export { DEMO_DATASET } from './model/demo-dataset.ts';
+export * from './model/trace/index.ts';
